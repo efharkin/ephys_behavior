@@ -16,6 +16,7 @@ import numpy as np
 import glob
 import os
 from load_phy_template import load_phy_template
+import fileIO
 
 #First Stab at synchronizing, stealing a lot of code from the ecephys repo (https://github.com/AllenInstitute/ecephys_pipeline)
 
