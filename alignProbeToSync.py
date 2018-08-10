@@ -58,6 +58,7 @@ def get_sync_line_data(dataset, line_label=None, channel=None):
 def extract_barcodes_from_times(on_times, off_times, inter_barcode_interval=10, 
                                 bar_duration=0.03, barcode_duration_ceiling=2, 
                                 nbits=32):
+    #from ecephys repo
     '''Read barcodes from timestamped rising and falling edges.
     Parameters
     ----------
@@ -132,6 +133,7 @@ def extract_barcodes_from_times(on_times, off_times, inter_barcode_interval=10,
     return barcode_start_times, barcodes
 
 def match_barcodes(master_times, master_barcodes, probe_times, probe_barcodes):
+    #from ecephys repo
     '''Given sequences of barcode values and (local) times on a probe line and a master 
     line, find the time points on each clock corresponding to the first and last shared 
     barcode.
@@ -193,6 +195,7 @@ def match_barcodes(master_times, master_barcodes, probe_times, probe_barcodes):
 
 
 def linear_transform_from_intervals(master, probe):
+    #from ecephys repo
     '''Find a scale and translation which aligns two 1d segments
     Parameters
     ----------
@@ -223,6 +226,7 @@ def linear_transform_from_intervals(master, probe):
 def get_probe_time_offset(master_times, master_barcodes, 
                           probe_times, probe_barcodes, 
                           acq_start_index, local_probe_rate):
+    #from ecephys repo
     """Time offset between master clock and recording probes. For converting probe time to master clock.
     
     Parameters
@@ -295,32 +299,54 @@ be_t, be = extract_barcodes_from_times(beRising, beFalling)
 shift, p_sampleRate, m_endpoints = get_probe_time_offset(bs_t, bs, be_t, be, 0, 30000)
 be_t_shifted = (be_t/(p_sampleRate/30000)) - shift #just to check that the shift and scale are right
 
-
-#Get unit spike times 
 spike_data_dir = os.path.join(glob.glob(os.path.join(dataDir, '*sorted'))[0], 'continuous\\Neuropix-3a-100.0')
-spike_clusters = np.load(os.path.join(spike_data_dir, 'spike_clusters.npy'))
-spike_times = np.load(os.path.join(spike_data_dir, 'spike_times.npy'))
-cluster_ids = pd.read_csv(os.path.join(spike_data_dir, 'cluster_groups.csv'), sep='\t')
-templates = np.load(os.path.join(spike_data_dir, 'templates.npy'))
-spike_templates = np.load(os.path.join(spike_data_dir, 'spike_templates.npy'))
-unit_ids = np.unique(spike_clusters)
+#Get unit spike times 
+def load_spike_info(spike_data_dir, p_sampleRate, shift):
+    ''' Make dictionary with spike times, templates, sorting label and peak channel for all units
+    
+        Parameters
+        -----------
+        spike_data_dir: path to directory with clustering output files
+        p_sampleRate: probe sampling rate according to master clock
+        shift: time shift between master and probe clock
+        p_sampleRate and shift are outputs from 'get_probe_time_offset' function
+        
+        Returns
+        ----------
+        units: dictionary with spike info for all units
+            each unit is integer key, so units[0] is a dictionary for spike cluster 0 with keys
+            'label': sorting label for unit, eg 'good', 'mua', or 'noise'
+            'times': spike times in seconds according to master clock
+            'template': spike template, should be replaced by waveform extracted from raw data
+                averaged over 1000 randomly chosen spikes
+            'peakChan': channel where spike template has minimum, used to approximate unit location
+    '''
+    
+    spike_clusters = np.load(os.path.join(spike_data_dir, 'spike_clusters.npy'))
+    spike_times = np.load(os.path.join(spike_data_dir, 'spike_times.npy'))
+    cluster_ids = pd.read_csv(os.path.join(spike_data_dir, 'cluster_groups.csv'), sep='\t')
+    templates = np.load(os.path.join(spike_data_dir, 'templates.npy'))
+    spike_templates = np.load(os.path.join(spike_data_dir, 'spike_templates.npy'))
+    unit_ids = np.unique(spike_clusters)
+    
+    units = {}
+    for u in unit_ids:
+        units[u] = {}
+        units[u]['label'] = cluster_ids[cluster_ids['cluster_id']==u]['group'].tolist()[0]
+        
+        unit_idx = np.where(spike_clusters==u)[0]
+        unit_sp_times = spike_times[unit_idx]/p_sampleRate - shift
+        
+        units[u]['times'] = unit_sp_times
+        
+        #choose 1000 spikes with replacement, then average their templates together
+        chosen_spikes = np.random.choice(unit_idx, 1000)
+        chosen_templates = spike_templates[chosen_spikes].flatten()
+        units[u]['template'] = np.mean(templates[chosen_templates], axis=0)
+        units[u]['peakChan'] = np.unravel_index(np.argmin(units[u]['template']), units[u]['template'].shape)[1]
 
-units = {}
-for u in unit_ids:
-    units[u] = {}
-    units[u]['label'] = cluster_ids[cluster_ids['cluster_id']==u]['group'].tolist()[0]
-    
-    unit_idx = np.where(spike_clusters==u)[0]
-    unit_sp_times = spike_times[unit_idx]/p_sampleRate - shift
-    
-    units[u]['times'] = unit_sp_times
-    
-    #choose 1000 spikes with replacement, then average their templates together
-    chosen_spikes = np.random.choice(unit_idx, 1000)
-    chosen_templates = spike_templates[chosen_spikes].flatten()
-    units[u]['template'] = np.mean(templates[chosen_templates], axis=0)
-    units[u]['peakChan'] = np.unravel_index(np.argmin(units[u]['template']), units[u]['template'].shape)[1]
 
+units = load_spike_info(spike_data_dir, p_sampleRate, shift)
 
 #align trials to clock
 trial_start_frames = np.array(trials['startframe'])
