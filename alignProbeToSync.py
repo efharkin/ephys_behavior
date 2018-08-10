@@ -17,6 +17,8 @@ import glob
 import os
 from load_phy_template import load_phy_template
 
+#First Stab at synchronizing, stealing a lot of code from the ecephys repo (https://github.com/AllenInstitute/ecephys_pipeline)
+
 dataDir = fileIO.getDir()
 
 sync_file = glob.glob(os.path.join(dataDir, '*.h5'))[0]
