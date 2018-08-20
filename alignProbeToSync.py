@@ -17,7 +17,7 @@ import glob
 import os
 from load_phy_template import load_phy_template
 import fileIO
-
+from probeData import formatFigure
 #First Stab at synchronizing, stealing a lot of code from the ecephys repo (https://github.com/AllenInstitute/ecephys_pipeline)
 
 dataDir = fileIO.getDir()
@@ -269,7 +269,7 @@ def get_probe_time_offset(master_times, master_barcodes,
     return total_time_shift, probe_rate, master_endpoints
 
 
-
+#Get frame times from sync file
 frameRising, frameFalling = get_sync_line_data(syncDataset, 'stim_vsync')
 
 #Get frame times from pkl behavior file
@@ -371,6 +371,7 @@ def makePSTH(spike_times, trial_start_times, trial_duration, bin_size = 0.1):
     return counts/len(trial_start_times)
 
 
+traceTime = np.linspace(-2, 10, 120)
 goodClusters = cluster_ids[cluster_ids['group'] == 'good'].cluster_id.tolist()
 for u in goodClusters:
     spikes = units[u]['times']
@@ -378,11 +379,25 @@ for u in goodClusters:
     psthVert = makePSTH(spikes, change_times[np.logical_or(change_ori==90, change_ori==270)]-2, 12)
     psthHorz = makePSTH(spikes, change_times[np.logical_or(change_ori==0, change_ori==180)]-2, 12)
     fig, ax = plt.subplots(1, 2)
-    ax[0].plot(psthVert)
-    ax[1].plot(psthHorz)
-    
+    fig.suptitle(str(u))
+    ax[0].plot(traceTime, psthVert/0.1)
+    ax[1].plot(traceTime, psthHorz/0.1)
+    for a in ax:    
+        formatFigure(fig, a, '', 'time, s', 'FR, Hz')
     
         
+from matplotlib.backends.backend_pdf import PdfPages
+import matplotlib.pyplot as plt
+
+def multipage(filename, figs=None, dpi=200):
+    pp = PdfPages(filename)
+    if figs is None:
+        figs = [plt.figure(n) for n in plt.get_fignums()]
+    for fig in figs:
+        fig.savefig(pp, format='pdf')
+    pp.close()
+    
+multipage(os.path.join(dataDir, 'behaviorPSTHs_08022018.pdf'))
 
 
 
