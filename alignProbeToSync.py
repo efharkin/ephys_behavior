@@ -20,8 +20,8 @@ import fileIO
 from probeData import formatFigure
 #First Stab at synchronizing, stealing a lot of code from the ecephys repo (https://github.com/AllenInstitute/ecephys_pipeline)
 
-dataDir = fileIO.getDir()
-
+#dataDir = fileIO.getDir()
+dataDir = "\\\\allen\\programs\\braintv\\workgroups\\nc-ophys\\corbettb\\Behavior\\08152018_385531"
 sync_file = glob.glob(os.path.join(dataDir, '*.h5'))[0]
 syncDataset = Dataset(sync_file)
 
@@ -267,40 +267,7 @@ def get_probe_time_offset(master_times, master_barcodes,
     total_time_shift = time_offset - acq_start_time
 
     return total_time_shift, probe_rate, master_endpoints
-
-
-#Get frame times from sync file
-frameRising, frameFalling = get_sync_line_data(syncDataset, 'stim_vsync')
-
-#Get frame times from pkl behavior file
-pkl_file = glob.glob(os.path.join(dataDir, '*.pkl'))[0]
-behaviordata = pd.read_pickle(pkl_file)
-core_data = data_to_change_detection_core(behaviordata)
-trials = create_extended_dataframe(
-    trials=core_data['trials'],
-    metadata=core_data['metadata'],
-    licks=core_data['licks'],
-    time=core_data['time'],
-)
-
-#Get barcodes from sync file
-bRising, bFalling = get_sync_line_data(syncDataset, 'barcode')
-bs_t, bs = extract_barcodes_from_times(bRising, bFalling)
-
-#Get barcodes from ephys data
-channel_states = np.load(os.path.join(glob.glob(os.path.join(dataDir, '*sorted'))[0], 'events\\Neuropix-3a-100.0\\TTL_1\\channel_states.npy'))
-event_times = np.load(os.path.join(glob.glob(os.path.join(dataDir, '*sorted'))[0], 'events\\Neuropix-3a-100.0\\TTL_1\\event_timestamps.npy'))
-
-beRising = event_times[channel_states>0]/30000.
-beFalling = event_times[channel_states<0]/30000.
-be_t, be = extract_barcodes_from_times(beRising, beFalling)
-
-#Compute time shift between ephys and sync
-shift, p_sampleRate, m_endpoints = get_probe_time_offset(bs_t, bs, be_t, be, 0, 30000)
-be_t_shifted = (be_t/(p_sampleRate/30000)) - shift #just to check that the shift and scale are right
-
-spike_data_dir = os.path.join(glob.glob(os.path.join(dataDir, '*sorted'))[0], 'continuous\\Neuropix-3a-100.0')
-#Get unit spike times 
+    
 def load_spike_info(spike_data_dir, p_sampleRate, shift):
     ''' Make dictionary with spike times, templates, sorting label and peak channel for all units
     
@@ -344,22 +311,7 @@ def load_spike_info(spike_data_dir, p_sampleRate, shift):
         chosen_templates = spike_templates[chosen_spikes].flatten()
         units[u]['template'] = np.mean(templates[chosen_templates], axis=0)
         units[u]['peakChan'] = np.unravel_index(np.argmin(units[u]['template']), units[u]['template'].shape)[1]
-
-
-units = load_spike_info(spike_data_dir, p_sampleRate, shift)
-
-#align trials to clock
-trial_start_frames = np.array(trials['startframe'])
-trial_end_frames = np.array(trials['endframe'])
-trial_start_times = frameRising[trial_start_frames]
-trial_end_times = frameFalling[trial_end_frames]
-trial_ori = np.array(trials['initial_ori'])
-
-change_frames = np.array(trials['change_frame'])
-change_times = frameRising[change_frames]
-change_ori = np.array(trials['change_ori'])
-
-#make psth for units
+    return units
 
 def makePSTH(spike_times, trial_start_times, trial_duration, bin_size = 0.1):
     counts = np.zeros(round(trial_duration/bin_size))    
@@ -370,22 +322,89 @@ def makePSTH(spike_times, trial_start_times, trial_duration, bin_size = 0.1):
                 counts[ib] += c
     return counts/len(trial_start_times)
 
+def getOrderedUnits(units, label=['good']):
+    '''Returns unit ids according to sorting label (default is only the 'good'
+    units) and probe position (tip first)
+    
+    Parameters
+    ----------
+    units: unit dictionary
+    label: list of labels to include
+    
+    Returns
+    ---------
+    ordered list of unit ids
+    '''
+    goodUnits = np.array([key for key in units if units[key]['label'] in label])
+    peakChans = [units[u]['peakChan'] for u in goodUnits]
+    return goodUnits[np.argsort(peakChans)]
 
+
+#Get frame times from sync file
+frameRising, frameFalling = get_sync_line_data(syncDataset, 'stim_vsync')
+
+#Get frame times from pkl behavior file
+pkl_file = glob.glob(os.path.join(dataDir, '*.pkl'))[0]
+behaviordata = pd.read_pickle(pkl_file)
+core_data = data_to_change_detection_core(behaviordata)
+trials = create_extended_dataframe(
+    trials=core_data['trials'],
+    metadata=core_data['metadata'],
+    licks=core_data['licks'],
+    time=core_data['time'],
+)
+
+#Get barcodes from sync file
+bRising, bFalling = get_sync_line_data(syncDataset, 'barcode')
+bs_t, bs = extract_barcodes_from_times(bRising, bFalling)
+
+#Get barcodes from ephys data
+channel_states = np.load(os.path.join(glob.glob(os.path.join(dataDir, '*sorted'))[0], 'events\\Neuropix-3a-100.0\\TTL_1\\channel_states.npy'))
+event_times = np.load(os.path.join(glob.glob(os.path.join(dataDir, '*sorted'))[0], 'events\\Neuropix-3a-100.0\\TTL_1\\event_timestamps.npy'))
+
+beRising = event_times[channel_states>0]/30000.
+beFalling = event_times[channel_states<0]/30000.
+be_t, be = extract_barcodes_from_times(beRising, beFalling)
+
+#Compute time shift between ephys and sync
+shift, p_sampleRate, m_endpoints = get_probe_time_offset(bs_t, bs, be_t, be, 0, 30000)
+be_t_shifted = (be_t/(p_sampleRate/30000)) - shift #just to check that the shift and scale are right
+
+spike_data_dir = os.path.join(glob.glob(os.path.join(dataDir, '*sorted'))[0], 'continuous\\Neuropix-3a-100.0')
+
+#Get unit spike times 
+units = load_spike_info(spike_data_dir, p_sampleRate, shift)
+
+#align trials to clock
+trial_start_frames = np.array(trials['startframe'])
+trial_end_frames = np.array(trials['endframe'])
+trial_start_times = frameRising[trial_start_frames]
+trial_end_times = frameFalling[trial_end_frames]
+trial_ori = np.array(trials['initial_ori'])
+
+change_frames = np.array(trials['change_frame'])
+change_frames = change_frames[~np.isnan(change_frames)].astype(np.int)
+change_times = frameRising[change_frames]
+change_ori = np.array(trials['change_ori'])[~np.isnan(change_frames)]
+
+#make psth for units
 traceTime = np.linspace(-2, 10, 120)
-goodClusters = cluster_ids[cluster_ids['group'] == 'good'].cluster_id.tolist()
-for u in goodClusters:
+goodUnits = getOrderedUnits(units)
+for u in goodUnits:
     spikes = units[u]['times']
     
     psthVert = makePSTH(spikes, change_times[np.logical_or(change_ori==90, change_ori==270)]-2, 12)
     psthHorz = makePSTH(spikes, change_times[np.logical_or(change_ori==0, change_ori==180)]-2, 12)
     fig, ax = plt.subplots(1, 2)
-    fig.suptitle(str(u))
+    fig.suptitle(str(u) + ': ' + str(units[u]['peakChan']))
     ax[0].plot(traceTime, psthVert/0.1)
     ax[1].plot(traceTime, psthHorz/0.1)
     for a in ax:    
         formatFigure(fig, a, '', 'time, s', 'FR, Hz')
     
-        
+
+
+#Make summary pdf of unit responses    
 from matplotlib.backends.backend_pdf import PdfPages
 import matplotlib.pyplot as plt
 
@@ -398,13 +417,6 @@ def multipage(filename, figs=None, dpi=200):
     pp.close()
     
 multipage(os.path.join(dataDir, 'behaviorPSTHs_08022018.pdf'))
-
-
-
-
-
-
-
 
 
 
