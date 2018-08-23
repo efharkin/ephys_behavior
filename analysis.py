@@ -19,7 +19,7 @@ dataDir = "\\\\allen\\programs\\braintv\\workgroups\\nc-ophys\\corbettb\\Behavio
 sync_file = glob.glob(os.path.join(dataDir, '*.h5'))[0]
 syncDataset = sync.Dataset(sync_file)
 
-units = probeSync.getUnitData(syncDataset)
+units = probeSync.getUnitData(dataDir,syncDataset)
 
 pkl_file = glob.glob(os.path.join(dataDir, '*.pkl'))[0]
 trials,frameRising,frameFalling = behavSync.getBehavData(syncDataset,pkl_file)
@@ -49,7 +49,7 @@ def makePSTH(spike_times, trial_start_times, trial_duration, bin_size = 0.1):
     return counts/len(trial_start_times)/bin_size
 
 traceTime = np.linspace(-2, 10, 120)
-goodUnits = getOrderedUnits(units)
+goodUnits = probeSync.getOrderedUnits(units)
 for u in goodUnits:
     spikes = units[u]['times']
     psthVert = makePSTH(spikes, change_times[np.logical_or(change_ori==90, change_ori==270)]-2, 12)
