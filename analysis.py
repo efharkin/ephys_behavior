@@ -13,6 +13,7 @@ import behavSync
 import numpy as np
 import matplotlib.pyplot as plt
 from probeData import formatFigure
+from visual_behavior.visualization.extended_trials.daily import make_daily_figure
 
 
 dataDir = "\\\\allen\\programs\\braintv\\workgroups\\nc-ophys\\corbettb\\Behavior\\08152018_385531"
@@ -24,7 +25,9 @@ units = probeSync.getUnitData(dataDir,syncDataset)
 pkl_file = glob.glob(os.path.join(dataDir, '*.pkl'))[0]
 trials,frameRising,frameFalling = behavSync.getBehavData(syncDataset,pkl_file)
 
-#align trials to clock
+make_daily_figure(trials)
+
+#align trials to sync
 trial_start_frames = np.array(trials['startframe'])
 trial_end_frames = np.array(trials['endframe'])
 trial_start_times = frameRising[trial_start_frames]
@@ -32,10 +35,10 @@ trial_end_times = frameFalling[trial_end_frames]
 
 trial_ori = np.array(trials['initial_ori'])
     
-notNullTrials = trials['change_frame'].notnull()
-change_frames = np.array(trials['change_frame'][notNullTrials]).astype(int)
+abortedTrials = trials['change_frame'].isnull()
+change_frames = np.array(trials['change_frame'][~abortedTrials]).astype(int)
 change_times = frameRising[change_frames]
-change_ori = np.array(trials['change_ori'])[notNullTrials]
+change_ori = np.array(trials['change_ori'])[~abortedTrials]
 
 
 #make psth for units
