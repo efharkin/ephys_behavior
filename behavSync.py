@@ -11,7 +11,7 @@ from visual_behavior.translator.foraging2 import data_to_change_detection_core
 import pandas as pd
 
 
-def getBehavData(syncDataset,pkl_file):
+def getBehavData(pkl_file,syncDataset):
     #Get frame times from sync file
     frameRising, frameFalling = probeSync.get_sync_line_data(syncDataset, 'stim_vsync')
     
@@ -24,4 +24,7 @@ def getBehavData(syncDataset,pkl_file):
         licks=core_data['licks'],
         time=core_data['time'])
     
-    return trials, frameRising, frameFalling
+    runTime = frameRising[core_data['running'].frame]
+    runSpeed = core_data['running'].speed
+    
+    return trials, frameRising, frameFalling, runTime, runSpeed

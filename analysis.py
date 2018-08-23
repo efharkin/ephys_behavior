@@ -23,7 +23,7 @@ syncDataset = sync.Dataset(sync_file)
 units = probeSync.getUnitData(dataDir,syncDataset)
 
 pkl_file = glob.glob(os.path.join(dataDir, '*.pkl'))[0]
-trials,frameRising,frameFalling = behavSync.getBehavData(syncDataset,pkl_file)
+trials, frameRising, frameFalling, runTime, runSpeed = behavSync.getBehavData(pkl_file,syncDataset)
 
 make_daily_figure(trials)
 
