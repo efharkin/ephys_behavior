@@ -78,3 +78,51 @@ def multipage(filename, figs=None, dpi=200):
     pp.close()
     
 multipage(os.path.join(dataDir, 'behaviorPSTHs_08022018.pdf'))
+
+
+
+
+def get_ccg(spikes1, spikes2, auto=False, width=0.1, bin_width=0.0005, plot=True):
+
+    d = []                   # Distance between any two spike times
+    n_sp = len(spikes2)  # Number of spikes in the input spike train
+
+    
+    i, j = 0, 0
+    for t in spikes1:
+        # For each spike we only consider those spikes times that are at most
+        # at a 'width' time lag. This requires finding the indices
+        # associated with the limiting spikes.
+        while i < n_sp and spikes2[i] < t - width:
+            i += 1
+        while j < n_sp and spikes2[j] < t + width:
+            j += 1
+
+        # Once the relevant spikes are found, add the time differences
+        # to the list
+        d.extend(spikes2[i:j] - t)
+
+    
+    d = np.array(d)
+    n_b = int( np.ceil(width / bin_width) )  # Num. edges per side
+    
+    # Define the edges of the bins (including rightmost bin)
+    b = np.linspace(-width, width, 2 * n_b, endpoint=True)
+    [h, hb] = np.histogram(d, bins=b)
+    hh = h.astype(np.float)/(len(spikes1)*len(spikes2))**0.5
+    
+    if auto:
+        hh[n_b-1] = 0
+    if plot:          
+        fig,ax = plt.subplots()
+        ax.bar(hb[:-1], hh, bin_width)
+        ax.set_xlim([-width,width])
+        ax.spines['right'].set_visible(False)
+        ax.spines['top'].set_visible(False)
+        ax.tick_params(direction='out',top=False,right=False,labelsize='xx-small')
+        
+    return hh, hb
+    
+    
+    
+
