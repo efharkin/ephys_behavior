@@ -112,7 +112,7 @@ def get_ccg(spikes1, spikes2, auto=False, width=0.1, bin_width=0.0005, plot=True
     hh = h.astype(np.float)/(len(spikes1)*len(spikes2))**0.5
     
     if auto:
-        hh[n_b-1] = 0
+        hh[n_b-1] = 0 #mask the 0 bin for autocorrelations
     if plot:          
         fig,ax = plt.subplots()
         ax.bar(hb[:-1], hh, bin_width)
