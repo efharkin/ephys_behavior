@@ -5,41 +5,85 @@ Created on Thu Aug 23 11:29:39 2018
 @author: svc_ccg
 """
 
-import os
-import glob
-from sync import sync
 import probeSync
-import behavSync
 import numpy as np
 import matplotlib.pyplot as plt
-from probeData import formatFigure
-from visual_behavior.visualization.extended_trials.daily import make_daily_figure
+import scipy.ndimage
 
-def makePSTH(spike_times, trial_start_times, trial_duration, bin_size = 0.1):
-    counts = np.zeros(int(trial_duration/bin_size))    
-    for ts in trial_start_times:
-        for ib, b in enumerate(np.arange(ts, ts+trial_duration, bin_size)):
-            c = np.sum((spike_times>=b) & (spike_times<b+bin_size))
-            counts[ib] += c
-    return counts/len(trial_start_times)/bin_size
+    
+def makePSTH(spikes,startTimes,windowDur,binSize=0.1):
+    bins = np.arange(0,windowDur+binSize,binSize)
+    counts = np.zeros((len(startTimes),bins.size-1))    
+    for i,start in enumerate(startTimes):
+        counts[i] = np.histogram(spikes[(spikes>=start) & (spikes<=start+windowDur)]-start,bins)[0]
+    return counts.mean(axis=0)/binSize
+    
+def getSDF(spikes,startTimes,windowDur,sigma=0.02,sampInt=0.001,avg=True):
+        t = np.arange(0,windowDur+sampInt,sampInt)
+        counts = np.zeros((startTimes.size,t.size-1))
+        for i,start in enumerate(startTimes):
+            counts[i] = np.histogram(spikes[(spikes>=start) & (spikes<=start+windowDur)]-start,t)[0]
+        sdf = scipy.ndimage.filters.gaussian_filter1d(counts,sigma/sampInt,axis=1)
+        if avg:
+            sdf = sdf.mean(axis=0)
+        sdf /= sampInt
+        return sdf,t[:-1]
 
 
-# psth for hit and miss trials for each image
-preTime = 1
-postTime = 1
-binSize = 0.05
-binCenters = np.arange(-preTime,postTime,binSize)+binSize/2
+# sdf for all hit and miss trials
+preTime = 1.5
+postTime = 1.5
+sdfSigma = 0.02
 for pid in probeIDs:
     for u in probeSync.getOrderedUnits(units[pid]):
-        fig = plt.figure(facecolor='w',figsize=(8,10))
         spikes = units[pid][u]['times']
+        fig = plt.figure(facecolor='w')
+        ax = plt.subplot(1,1,1)
+        ymax = 0
+        for resp,clr in zip((hit,miss),'rb'):
+            selectedTrials = resp & (~ignore)
+            changeTimes = frameRising[np.array(trials['change_frame'][selectedTrials]).astype(int)]
+            sdf,t = getSDF(spikes,changeTimes-preTime,preTime+postTime,sigma=sdfSigma)
+            ax.plot(t-preTime,sdf,clr)
+            ymax = max(ymax,sdf.max())
+        for side in ('right','top'):
+            ax.spines[side].set_visible(False)
+        ax.tick_params(direction='out',top=False,right=False,labelsize=10)
+        ax.set_xlim([-preTime,postTime])
+        ax.set_ylim([0,1.02*ymax])
+        ax.set_xlabel('Time relative to image change (s)',fontsize=12)
+        ax.set_ylabel('Spike/s',fontsize=12)
+        ax.set_title('Probe '+pid+', Unit '+str(u),fontsize=12)
+        plt.tight_layout()
+
+
+# sdf for hit and miss trials for each image
+for pid in probeIDs:
+    for u in probeSync.getOrderedUnits(units[pid]):
+        spikes = units[pid][u]['times']
+        fig = plt.figure(facecolor='w',figsize=(8,10))
+        axes = []
+        ymax = 0
         for i,img in enumerate(imageNames):
-            ax = plt.subplot(imageNames.size,1,i+1)
+            axes.append(plt.subplot(imageNames.size,1,i+1))
             for resp,clr in zip((hit,miss),'rb'):
                 selectedTrials = resp & (changeImage==img) & (~ignore)
                 changeTimes = frameRising[np.array(trials['change_frame'][selectedTrials]).astype(int)]
-                psth = makePSTH(spikes,changeTimes-preTime,preTime+postTime,binSize)
-                ax.plot(binCenters,psth,clr)
+                sdf,t = getSDF(spikes,changeTimes-preTime,preTime+postTime,sigma=sdfSigma)
+                axes[-1].plot(t-preTime,sdf,clr)
+                ymax = max(ymax,sdf.max())
+        for ax,img in zip(axes,imageNames):
+            for side in ('right','top'):
+                ax.spines[side].set_visible(False)
+            ax.tick_params(direction='out',top=False,right=False,labelsize=10)
+            ax.set_xlim([-preTime,postTime])
+            ax.set_ylim([0,1.02*ymax])
+            ax.set_ylabel(img,fontsize=12)
+            if ax!=axes[-1]:
+                ax.set_xticklabels([])
+        axes[-1].set_xlabel('Time relative to image change (s)',fontsize=12)
+        axes[0].set_title('Probe '+pid+', Unit '+str(u),fontsize=12)
+        plt.tight_layout()
 
 
 
