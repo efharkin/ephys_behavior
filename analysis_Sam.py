@@ -30,16 +30,40 @@ def getSDF(spikes,startTimes,windowDur,sigma=0.02,sampInt=0.001,avg=True):
         return sdf,t[:-1]
 
 
-# psth for hit and miss trials for each image
+# sdf for all hit and miss trials
 preTime = 1.5
 postTime = 1.5
 sdfSigma = 0.02
 for pid in probeIDs:
     for u in probeSync.getOrderedUnits(units[pid]):
+        spikes = units[pid][u]['times']
+        fig = plt.figure(facecolor='w')
+        ax = plt.subplot(1,1,1)
+        ymax = 0
+        for resp,clr in zip((hit,miss),'rb'):
+            selectedTrials = resp & (~ignore)
+            changeTimes = frameRising[np.array(trials['change_frame'][selectedTrials]).astype(int)]
+            sdf,t = getSDF(spikes,changeTimes-preTime,preTime+postTime,sigma=sdfSigma)
+            ax.plot(t-preTime,sdf,clr)
+            ymax = max(ymax,sdf.max())
+        for side in ('right','top'):
+            ax.spines[side].set_visible(False)
+        ax.tick_params(direction='out',top=False,right=False,labelsize=10)
+        ax.set_xlim([-preTime,postTime])
+        ax.set_ylim([0,1.02*ymax])
+        ax.set_xlabel('Time relative to image change (s)',fontsize=12)
+        ax.set_ylabel('Spike/s',fontsize=12)
+        ax.set_title('Probe '+pid+', Unit '+str(u),fontsize=12)
+        plt.tight_layout()
+
+
+# sdf for hit and miss trials for each image
+for pid in probeIDs:
+    for u in probeSync.getOrderedUnits(units[pid]):
+        spikes = units[pid][u]['times']
         fig = plt.figure(facecolor='w',figsize=(8,10))
         axes = []
         ymax = 0
-        spikes = units[pid][u]['times']
         for i,img in enumerate(imageNames):
             axes.append(plt.subplot(imageNames.size,1,i+1))
             for resp,clr in zip((hit,miss),'rb'):
