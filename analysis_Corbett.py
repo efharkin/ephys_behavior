@@ -18,13 +18,13 @@ from visual_behavior.visualization.extended_trials.daily import make_daily_figur
 def makePSTH(spike_times, trial_start_times, trial_duration, bin_size = 0.1):
     counts = np.zeros(int(trial_duration/bin_size))    
     for ts in trial_start_times:
-        for ib, b in enumerate(np.arange(ts, ts+trial_duration, bin_size)):
-            c = np.sum((spike_times>=b) & (spike_times<b+bin_size))
-            counts[ib] += c
+        relevant_spike_times = spike_times[(spike_times>=ts)&(spike_times<ts+trial_duration)]
+        if len(relevant_spike_times)>0:
+            for ib, b in enumerate(np.arange(ts, ts+trial_duration, bin_size)):
+                c = np.sum((relevant_spike_times>=b) & (relevant_spike_times<b+bin_size))
+                if ib<counts.size:
+                    counts[ib] += c
     return counts/len(trial_start_times)/bin_size
-
-
-
 
 # psth for hit and miss trials for each image
 preTime = 1
@@ -45,9 +45,28 @@ for pid in probeIDs:
 
 
 
+# make psth for units for all flashes of each image
+preTime = 0.1
+postTime = 0.5
+binSize = 0.005
+binCenters = np.arange(-preTime,postTime,binSize)+binSize/2
+image_flash_times = frameRising[np.array(core_data['visual_stimuli']['frame'])]
+image_id = np.array(core_data['visual_stimuli']['image_name'])
+for pid in probeIDs:
+    for u in probeSync.getOrderedUnits(units[pid]):
+        fig = plt.figure(facecolor='w',figsize=(8,10))
+        spikes = units[pid][u]['times']
+        for i,img in enumerate(imageNames):
+            ax = plt.subplot(imageNames.size,1,i+1)
+            this_image_times = image_flash_times[image_id==img]         
+           
+            psth = makePSTH(spikes,this_image_times-preTime,preTime+postTime,binSize)
+            ax.plot(binCenters,psth,clr)
+
+
+
+
 #make psth for units
-
-
 traceTime = np.linspace(-2, 10, 120)
 goodUnits = probeSync.getOrderedUnits(units)
 for u in goodUnits:
@@ -74,7 +93,7 @@ def multipage(filename, figs=None, dpi=200):
         fig.savefig(pp, format='pdf')
     pp.close()
     
-multipage(os.path.join(dataDir, 'behaviorPSTHs_08022018.pdf'))
+multipage(os.path.join(dataDir, 'behaviorPSTHs_allflashes_0910.pdf'))
 
 
 
