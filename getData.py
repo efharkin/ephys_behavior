@@ -24,7 +24,7 @@ probeIDs = ('C',)
 units = {str(pid): probeSync.getUnitData(dataDir,syncDataset, pid) for pid in probeIDs}
 
 pkl_file = glob.glob(os.path.join(dataDir,'*[0-9].pkl'))[0]
-trials, frameRising, frameFalling, runTime, runSpeed = behavSync.getBehavData(pkl_file,syncDataset)
+trials, core_data, frameRising, frameFalling, runTime, runSpeed = behavSync.getBehavData(pkl_file,syncDataset)
 
 make_daily_figure(trials)
 

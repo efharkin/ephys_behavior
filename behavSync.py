@@ -27,4 +27,4 @@ def getBehavData(pkl_file,syncDataset):
     runTime = frameRising[core_data['running'].frame]
     runSpeed = core_data['running'].speed
     
-    return trials, frameRising, frameFalling, runTime, runSpeed
+    return trials, core_data, frameRising, frameFalling, runTime, runSpeed
