@@ -15,14 +15,23 @@ import matplotlib.pyplot as plt
 from probeData import formatFigure
 from visual_behavior.visualization.extended_trials.daily import make_daily_figure
 
+def makePSTH(spike_times, trial_start_times, trial_duration, bin_size = 0.1):
+    counts = np.zeros(int(trial_duration/bin_size))    
+    for ts in trial_start_times:
+        for ib, b in enumerate(np.arange(ts, ts+trial_duration, bin_size)):
+            c = np.sum((spike_times>=b) & (spike_times<b+bin_size))
+            counts[ib] += c
+    return counts/len(trial_start_times)/bin_size
 
-dataDir = "\\\\allen\\programs\\braintv\\workgroups\\nc-ophys\\corbettb\\Behavior\\08152018_385531"
+
+dataDir = "\\\\allen\\programs\\braintv\\workgroups\\nc-ophys\\corbettb\\Behavior\\09102018_385533"
 sync_file = glob.glob(os.path.join(dataDir, '*.h5'))[0]
 syncDataset = sync.Dataset(sync_file)
 
-units = probeSync.getUnitData(dataDir,syncDataset)
+probeIDs = ('C',)
+units = {str(pid): probeSync.getUnitData(dataDir,syncDataset, pid) for pid in probeIDs}
 
-pkl_file = glob.glob(os.path.join(dataDir, '*.pkl'))[0]
+pkl_file = glob.glob(os.path.join(dataDir,'*[0-9].pkl'))[0]
 trials, frameRising, frameFalling, runTime, runSpeed = behavSync.getBehavData(pkl_file,syncDataset)
 
 make_daily_figure(trials)
@@ -33,23 +42,39 @@ trial_end_frames = np.array(trials['endframe'])
 trial_start_times = frameRising[trial_start_frames]
 trial_end_times = frameFalling[trial_end_frames]
 
-trial_ori = np.array(trials['initial_ori'])
-    
-abortedTrials = trials['change_frame'].isnull()
-change_frames = np.array(trials['change_frame'][~abortedTrials]).astype(int)
-change_times = frameRising[change_frames]
-change_ori = np.array(trials['change_ori'])[~abortedTrials]
+# trial info
+autoRewarded = np.array(trials['auto_rewarded']).astype(bool)
+earlyResponse = np.array(trials['response_type']=='EARLY_RESPONSE')
+ignore = earlyResponse | autoRewarded
+miss = np.array(trials['response_type']=='MISS')
+hit = np.array(trials['response_type']=='HIT')
+falseAlarm = np.array(trials['response_type']=='FA')
+correctReject = np.array(trials['response_type']=='CR')
+initialImage = np.array(trials['initial_image_name'])
+changeImage = np.array(trials['change_image_name'])
+imageNames = np.unique(changeImage)
+
+# psth for hit and miss trials for each image
+preTime = 1
+postTime = 1
+binSize = 0.05
+binCenters = np.arange(-preTime,postTime,binSize)+binSize/2
+for pid in probeIDs:
+    for u in probeSync.getOrderedUnits(units[pid]):
+        fig = plt.figure(facecolor='w',figsize=(8,10))
+        spikes = units[pid][u]['times']
+        for i,img in enumerate(imageNames):
+            ax = plt.subplot(imageNames.size,1,i+1)
+            for resp,clr in zip((hit,miss),'rb'):
+                selectedTrials = resp & (changeImage==img) & (~ignore)
+                changeTimes = frameRising[np.array(trials['change_frame'][selectedTrials]).astype(int)]
+                psth = makePSTH(spikes,changeTimes-preTime,preTime+postTime,binSize)
+                ax.plot(binCenters,psth,clr)
+
 
 
 #make psth for units
 
-def makePSTH(spike_times, trial_start_times, trial_duration, bin_size = 0.1):
-    counts = np.zeros(int(trial_duration/bin_size))    
-    for ts in trial_start_times:
-        for ib, b in enumerate(np.arange(ts, ts+trial_duration, bin_size)):
-            c = np.sum((spike_times>=b) & (spike_times<b+bin_size))
-            counts[ib] += c
-    return counts/len(trial_start_times)/bin_size
 
 traceTime = np.linspace(-2, 10, 120)
 goodUnits = probeSync.getOrderedUnits(units)

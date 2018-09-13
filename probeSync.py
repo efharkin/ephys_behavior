@@ -13,14 +13,16 @@ import glob
 import os
 
 
-def getUnitData(dataDir,syncDataset):
+def getUnitData(dataDir,syncDataset,probeID):
+    probeDir =  glob.glob(os.path.join(dataDir,'*Probe'+probeID+'_sorted'))[0]   
+    
     #Get barcodes from sync file
     bRising, bFalling = get_sync_line_data(syncDataset, 'barcode')
     bs_t, bs = ecephys.extract_barcodes_from_times(bRising, bFalling)
     
     #Get barcodes from ephys data
-    channel_states = np.load(os.path.join(glob.glob(os.path.join(dataDir, '*sorted'))[0], 'events\\Neuropix-3a-100.0\\TTL_1\\channel_states.npy'))
-    event_times = np.load(os.path.join(glob.glob(os.path.join(dataDir, '*sorted'))[0], 'events\\Neuropix-3a-100.0\\TTL_1\\event_timestamps.npy'))
+    channel_states = np.load(os.path.join(probeDir,'events\\Neuropix-3a-100.0\\TTL_1\\channel_states.npy'))
+    event_times = np.load(os.path.join(probeDir,'events\\Neuropix-3a-100.0\\TTL_1\\event_timestamps.npy'))
     
     beRising = event_times[channel_states>0]/30000.
     beFalling = event_times[channel_states<0]/30000.
@@ -31,7 +33,7 @@ def getUnitData(dataDir,syncDataset):
     be_t_shifted = (be_t/(p_sampleRate/30000)) - shift #just to check that the shift and scale are right
     
     #Get unit spike times 
-    spike_data_dir = os.path.join(glob.glob(os.path.join(dataDir, '*sorted'))[0], 'continuous\\Neuropix-3a-100.0')
+    spike_data_dir = os.path.join(probeDir,'continuous\\Neuropix-3a-100.0')
     units = load_spike_info(spike_data_dir, p_sampleRate, shift)
     
     return units
