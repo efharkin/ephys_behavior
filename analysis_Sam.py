@@ -30,12 +30,17 @@ def getSDF(spikes,startTimes,windowDur,sigma=0.02,sampInt=0.001,avg=True):
         return sdf,t[:-1]
 
 
-# sdf for all hit and miss trials
 preTime = 1.5
 postTime = 1.5
 sdfSigma = 0.02
-for pid in probeIDs:
-    for u in probeSync.getOrderedUnits(units[pid]):
+
+probesToAnalyze = ['A']
+unitsToAnalyze = [84]
+
+# sdf for all hit and miss trials
+for pid in probesToAnalyze:
+    orderedUnits = probeSync.getOrderedUnits(units[pid]) if len(unitsToAnalyze)<1 else unitsToAnalyze
+    for u in orderedUnits:
         spikes = units[pid][u]['times']
         fig = plt.figure(facecolor='w')
         ax = plt.subplot(1,1,1)
@@ -58,8 +63,9 @@ for pid in probeIDs:
 
 
 # sdf for hit and miss trials for each image
-for pid in probeIDs:
-    for u in probeSync.getOrderedUnits(units[pid]):
+for pid in probesToAnalyze:
+    orderedUnits = probeSync.getOrderedUnits(units[pid]) if len(unitsToAnalyze)<1 else unitsToAnalyze
+    for u in orderedUnits:
         spikes = units[pid][u]['times']
         fig = plt.figure(facecolor='w',figsize=(8,10))
         axes = []
