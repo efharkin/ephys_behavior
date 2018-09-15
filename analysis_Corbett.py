@@ -15,10 +15,17 @@ import matplotlib.pyplot as plt
 from probeData import formatFigure
 from visual_behavior.visualization.extended_trials.daily import make_daily_figure
 
-probes_to_run = ('A')
 
+probes_to_run = ('A', 'B', 'C')
 
-def makePSTH(spike_times, trial_start_times, trial_duration, bin_size = 0.1):
+def makePSTH(spikes,startTimes,windowDur,binSize=0.1):
+    bins = np.arange(0,windowDur+binSize,binSize)
+    counts = np.zeros((len(startTimes),bins.size-1))    
+    for i,start in enumerate(startTimes):
+        counts[i] = np.histogram(spikes[(spikes>=start) & (spikes<=start+windowDur)]-start,bins)[0]
+    return counts.mean(axis=0)/binSize
+    
+def makePSTH_old(spike_times, trial_start_times, trial_duration, bin_size = 0.1):
     counts = np.zeros(int(trial_duration/bin_size))    
     for ts in trial_start_times:
         relevant_spike_times = spike_times[(spike_times>=ts)&(spike_times<ts+trial_duration)]
@@ -56,18 +63,27 @@ binCenters = np.arange(-preTime,postTime,binSize)+binSize/2
 image_flash_times = frameRising[np.array(core_data['visual_stimuli']['frame'])]
 image_id = np.array(core_data['visual_stimuli']['image_name'])
 for pid in probes_to_run:
+    plt.close('all')
     for u in probeSync.getOrderedUnits(units[pid]):
-        fig = plt.figure(facecolor='w',figsize=(8,10))
-        fig.suptitle(u)
+        fig, ax = plt.subplots(imageNames.size)
+        fig.suptitle('Probe ' + pid + ': ' + str(u))   
         spikes = units[pid][u]['times']
+        maxFR = 0
         for i,img in enumerate(imageNames):
-            ax = plt.subplot(imageNames.size,1,i+1)
             this_image_times = image_flash_times[image_id==img]         
-           
             psth = makePSTH(spikes,this_image_times-preTime,preTime+postTime,binSize)
-            ax.plot(binCenters,psth, 'k')
+            maxFR = max(maxFR, psth.max())
+            ax[i].plot(binCenters,psth, 'k')
+        
+        for ia, a in enumerate(ax):
+            a.set_ylim([0, maxFR])
+            a.set_yticks([0, round(maxFR+0.5)])
+            a.text(postTime*1.05, maxFR/2, imageNames[ia])
+            formatFigure(fig, a, xLabel='time (s)', yLabel='FR (Hz)')
+            if ia < ax.size-1:
+                a.axis('off')
     multipage(os.path.join(dataDir, 'behaviorPSTHs_allflashes_' + pid + '.pdf'))
-
+    
 
 
 #make psth for units
@@ -155,6 +171,7 @@ def find_spikes_per_trial(spikes, trial_starts, trial_ends):
 #First get stimulus pickle file
 rfstim_pickle_file = glob.glob(os.path.join(dataDir, '*brain_observatory_stimulus.pkl'))[0]
 stim_dict = pd.read_pickle(rfstim_pickle_file)
+pre_blank_frames = stim_dict['pre_blank_sec']*60
 rfstim = stim_dict['stimuli'][0]
 
 #extract trial stim info (xpos, ypos, ori)
@@ -171,7 +188,7 @@ ypos = np.unique(trial_ypos)
 ori = np.unique(trial_ori)
 
 #get first frame for this stimulus (first frame after end of behavior session)
-first_rf_frame = trials['endframe'].values[-1] + 1
+first_rf_frame = trials['endframe'].values[-1] + pre_blank_frames + 1
 rf_frameRising = frameRising[first_rf_frame:]
 trial_start_times = rf_frameRising[np.array([f[0] for f in sweep_frames]).astype(np.int)]
 trial_end_times = rf_frameRising[np.array([f[1] for f in sweep_frames]).astype(np.int)]
@@ -180,26 +197,23 @@ preTime = 0
 postTime = 0.5
 binSize = 0.01
 psthSize = np.arange(preTime, postTime, binSize).size
-
-respMats = []
+pid = 'B'
 for u in probeSync.getOrderedUnits(units[pid]):
     spikes = units[pid][u]['times']
     #trial_spikes, _ = np.histogram(spikes, bins=np.append(trial_start_times, trial_end_times[-1])+resp_latency)
-    trial_spikes = find_spikes_per_trial(spikes, trial_start_times + resp_latency, trial_start_times+resp_latency+0.1)
+    trial_spikes = find_spikes_per_trial(spikes, trial_start_times + resp_latency, trial_start_times+resp_latency+0.2)
     respMat = np.zeros([xpos.size, ypos.size, ori.size])
     for (x, y, o, tspikes) in zip(trial_xpos, trial_ypos, trial_ori, trial_spikes):
         respInd = tuple([np.where(xpos==x)[0][0], np.where(ypos==y)[0][0], np.where(ori==o)[0][0]])
         respMat[respInd] += tspikes
     
     bestOri = np.unravel_index(np.argmax(respMat), respMat.shape)[-1]
-    fig, ax = plt.subplots(2, 1)
-    fig.suptitle(u)    
-    ax[0].imshow(respMat[:, :, bestOri], interpolation='none')
-#    respMats.append(respMat)
-    psth = makePSTH(spikes,trial_start_times,0.5,0.01)
-    ax[1].plot(np.linspace(0, 500, 50),psth, 'k')
+    fig, ax = plt.subplots()
+    fig.suptitle('Probe ' + pid + ': ' + str(u))    
+    im = ax.imshow(respMat[:, :, bestOri].T, interpolation='none', origin='lower')
+    plt.colorbar(im)
 
-
+multipage(os.path.join(dataDir, 'rfheatmap_Probe' + pid + '.pdf'))
 
 respMats = np.array(respMats)
 plt.figure(str(resp_latency))
@@ -207,9 +221,6 @@ plt.imshow(np.mean(np.max(respMats, 3), axis=0), interpolation='none')
 respMats = np.array(respMats)
 plt.figure(str(resp_latency))
 plt.imshow(np.mean(np.max(respMats, 3), axis=0), interpolation='none')
-
-
-
 
 
 respMats = []
