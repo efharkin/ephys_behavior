@@ -20,7 +20,11 @@ dataDir = "\\\\allen\\programs\\braintv\\workgroups\\nc-ophys\\corbettb\\Behavio
 sync_file = glob.glob(os.path.join(dataDir, '*.h5'))[0]
 syncDataset = sync.Dataset(sync_file)
 
+<<<<<<< HEAD
+probeIDs = ('A','B','C')
+=======
 probeIDs = ('C', 'A', 'B')
+>>>>>>> 7189a4e18a0d7b652ab0d78a40c3c4fea597ef85
 units = {str(pid): probeSync.getUnitData(dataDir,syncDataset, pid) for pid in probeIDs}
 
 pkl_file = glob.glob(os.path.join(dataDir,'*[0-9].pkl'))[0]
