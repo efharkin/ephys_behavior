@@ -24,99 +24,6 @@ def makePSTH(spikes,startTimes,windowDur,binSize=0.1):
     for i,start in enumerate(startTimes):
         counts[i] = np.histogram(spikes[(spikes>=start) & (spikes<=start+windowDur)]-start,bins)[0]
     return counts.mean(axis=0)/binSize
-    
-def makePSTH_old(spike_times, trial_start_times, trial_duration, bin_size = 0.1):
-    counts = np.zeros(int(trial_duration/bin_size))    
-    for ts in trial_start_times:
-        relevant_spike_times = spike_times[(spike_times>=ts)&(spike_times<ts+trial_duration)]
-        if len(relevant_spike_times)>0:
-            for ib, b in enumerate(np.arange(ts, ts+trial_duration, bin_size)):
-                c = np.sum((relevant_spike_times>=b) & (relevant_spike_times<b+bin_size))
-                if ib<counts.size:
-                    counts[ib] += c
-    return counts/len(trial_start_times)/bin_size
-
-# psth for hit and miss trials for each image
-preTime = 1
-postTime = 1
-binSize = 0.05
-binCenters = np.arange(-preTime,postTime,binSize)+binSize/2
-for pid in probeIDs:
-    for u in probeSync.getOrderedUnits(units[pid]):
-        fig = plt.figure(facecolor='w',figsize=(8,10))
-        spikes = units[pid][u]['times']
-        for i,img in enumerate(imageNames):
-            ax = plt.subplot(imageNames.size,1,i+1)
-            for resp,clr in zip((hit,miss),'rb'):
-                selectedTrials = resp & (changeImage==img) & (~ignore)
-                changeTimes = frameRising[np.array(trials['change_frame'][selectedTrials]).astype(int)]
-                psth = makePSTH(spikes,changeTimes-preTime,preTime+postTime,binSize)
-                ax.plot(binCenters,psth,clr)
-
-
-
-# make psth for units for all flashes of each image
-preTime = 0.1
-postTime = 0.5
-binSize = 0.005
-binCenters = np.arange(-preTime,postTime,binSize)+binSize/2
-image_flash_times = frameRising[np.array(core_data['visual_stimuli']['frame'])]
-image_id = np.array(core_data['visual_stimuli']['image_name'])
-for pid in probes_to_run:
-    plt.close('all')
-    for u in probeSync.getOrderedUnits(units[pid]):
-        fig, ax = plt.subplots(imageNames.size)
-        fig.suptitle('Probe ' + pid + ': ' + str(u))   
-        spikes = units[pid][u]['times']
-        maxFR = 0
-        for i,img in enumerate(imageNames):
-            this_image_times = image_flash_times[image_id==img]         
-            psth = makePSTH(spikes,this_image_times-preTime,preTime+postTime,binSize)
-            maxFR = max(maxFR, psth.max())
-            ax[i].plot(binCenters,psth, 'k')
-        
-        for ia, a in enumerate(ax):
-            a.set_ylim([0, maxFR])
-            a.set_yticks([0, round(maxFR+0.5)])
-            a.text(postTime*1.05, maxFR/2, imageNames[ia])
-            formatFigure(fig, a, xLabel='time (s)', yLabel='FR (Hz)')
-            if ia < ax.size-1:
-                a.axis('off')
-    multipage(os.path.join(dataDir, 'behaviorPSTHs_allflashes_' + pid + '.pdf'))
-    
-
-
-#make psth for units
-traceTime = np.linspace(-2, 10, 120)
-goodUnits = probeSync.getOrderedUnits(units)
-for u in goodUnits:
-    spikes = units[u]['times']
-    psthVert = makePSTH(spikes, change_times[np.logical_or(change_ori==90, change_ori==270)]-2, 12)
-    psthHorz = makePSTH(spikes, change_times[np.logical_or(change_ori==0, change_ori==180)]-2, 12)
-    fig, ax = plt.subplots(1, 2)
-    fig.suptitle(str(u) + ': ' + str(units[u]['peakChan']))
-    ax[0].plot(traceTime, psthVert)
-    ax[1].plot(traceTime, psthHorz)
-    for a in ax:    
-        formatFigure(fig, a, '', 'time, s', 'FR, Hz')
-    
-
-#Make summary pdf of unit responses    
-from matplotlib.backends.backend_pdf import PdfPages
-import matplotlib.pyplot as plt
-
-def multipage(filename, figs=None, dpi=200):
-    pp = PdfPages(filename)
-    if figs is None:
-        figs = [plt.figure(n) for n in plt.get_fignums()]
-    for fig in figs:
-        fig.savefig(pp, format='pdf')
-    pp.close()
-    
-multipage(os.path.join(dataDir, 'behaviorPSTHs_allflashesProbeA_0910.pdf'))
-
-
-
 
 def get_ccg(spikes1, spikes2, auto=False, width=0.1, bin_width=0.0005, plot=True):
 
@@ -162,16 +69,74 @@ def get_ccg(spikes1, spikes2, auto=False, width=0.1, bin_width=0.0005, plot=True
 def find_spikes_per_trial(spikes, trial_starts, trial_ends):
     spike_counts = np.zeros(len(trial_starts))
     for i, (ts, te) in enumerate(zip(trial_starts, trial_ends)):
-        spike_counts[i] = ((spikes>=ts) & (spikes<te)).sum()
-    
+        spike_counts[i] = ((spikes>=ts) & (spikes<te)).sum()  
     return spike_counts
+    
+#Make summary pdf of unit responses    
+from matplotlib.backends.backend_pdf import PdfPages
+import matplotlib.pyplot as plt
+
+def multipage(filename, figs=None, dpi=200):
+    pp = PdfPages(filename)
+    if figs is None:
+        figs = [plt.figure(n) for n in plt.get_fignums()]
+    for fig in figs:
+        fig.savefig(pp, format='pdf')
+    pp.close()
+    
+
+# make psth for units for all flashes of each image
+preTime = 0.1
+postTime = 0.5
+binSize = 0.005
+binCenters = np.arange(-preTime,postTime,binSize)+binSize/2
+image_flash_times = frameRising[np.array(core_data['visual_stimuli']['frame'])]
+image_id = np.array(core_data['visual_stimuli']['image_name'])
+for pid in probes_to_run:
+    plt.close('all')
+    for u in probeSync.getOrderedUnits(units[pid]):
+        fig, ax = plt.subplots(imageNames.size)
+        fig.suptitle('Probe ' + pid + ': ' + str(u))   
+        spikes = units[pid][u]['times']
+        maxFR = 0
+        for i,img in enumerate(imageNames):
+            this_image_times = image_flash_times[image_id==img]         
+            psth = makePSTH(spikes,this_image_times-preTime,preTime+postTime,binSize)
+            maxFR = max(maxFR, psth.max())
+            ax[i].plot(binCenters,psth, 'k')
+        
+        for ia, a in enumerate(ax):
+            a.set_ylim([0, maxFR])
+            a.set_yticks([0, round(maxFR+0.5)])
+            a.text(postTime*1.05, maxFR/2, imageNames[ia])
+            formatFigure(fig, a, xLabel='time (s)', yLabel='FR (Hz)')
+            if ia < ax.size-1:
+                a.axis('off')
+    multipage(os.path.join(dataDir, 'behaviorPSTHs_allflashes_' + pid + '.pdf'))
+    
+
+
+##make psth for units during gratings task
+#traceTime = np.linspace(-2, 10, 120)
+#goodUnits = probeSync.getOrderedUnits(units)
+#for u in goodUnits:
+#    spikes = units[u]['times']
+#    psthVert = makePSTH(spikes, change_times[np.logical_or(change_ori==90, change_ori==270)]-2, 12)
+#    psthHorz = makePSTH(spikes, change_times[np.logical_or(change_ori==0, change_ori==180)]-2, 12)
+#    fig, ax = plt.subplots(1, 2)
+#    fig.suptitle(str(u) + ': ' + str(units[u]['peakChan']))
+#    ax[0].plot(traceTime, psthVert)
+#    ax[1].plot(traceTime, psthHorz)
+#    for a in ax:    
+#        formatFigure(fig, a, '', 'time, s', 'FR, Hz')
+
     
 
 #######   Analyze RF #########
 #First get stimulus pickle file
 rfstim_pickle_file = glob.glob(os.path.join(dataDir, '*brain_observatory_stimulus.pkl'))[0]
 stim_dict = pd.read_pickle(rfstim_pickle_file)
-pre_blank_frames = stim_dict['pre_blank_sec']*60
+pre_blank_frames = int(stim_dict['pre_blank_sec']*stim_dict['fps'])
 rfstim = stim_dict['stimuli'][0]
 
 #extract trial stim info (xpos, ypos, ori)
