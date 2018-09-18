@@ -16,15 +16,12 @@ from probeData import formatFigure
 from visual_behavior.visualization.extended_trials.daily import make_daily_figure
 
 
-dataDir = "\\\\allen\\programs\\braintv\\workgroups\\nc-ophys\\corbettb\\Behavior\\09102018_385533"
+dataDir = "\\\\allen\\programs\\braintv\\workgroups\\nc-ophys\\corbettb\\Behavior\\09072018_385533"
 sync_file = glob.glob(os.path.join(dataDir, '*.h5'))[0]
 syncDataset = sync.Dataset(sync_file)
 
-<<<<<<< HEAD
 probeIDs = ('A','B','C')
-=======
-probeIDs = ('C', 'A', 'B')
->>>>>>> 7189a4e18a0d7b652ab0d78a40c3c4fea597ef85
+
 units = {str(pid): probeSync.getUnitData(dataDir,syncDataset, pid) for pid in probeIDs}
 
 pkl_file = glob.glob(os.path.join(dataDir,'*[0-9].pkl'))[0]
