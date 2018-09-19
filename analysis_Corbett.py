@@ -16,7 +16,7 @@ from probeData import formatFigure
 from visual_behavior.visualization.extended_trials.daily import make_daily_figure
 
 
-probes_to_run = ('A', 'B', 'C')
+probes_to_run = ('C')
 
 def makePSTH(spikes,startTimes,windowDur,binSize=0.1):
     bins = np.arange(0,windowDur+binSize,binSize)
@@ -162,7 +162,7 @@ preTime = 0
 postTime = 0.5
 binSize = 0.01
 psthSize = np.arange(preTime, postTime, binSize).size
-pid = 'B'
+pid = 'C'
 for u in probeSync.getOrderedUnits(units[pid]):
     spikes = units[pid][u]['times']
     #trial_spikes, _ = np.histogram(spikes, bins=np.append(trial_start_times, trial_end_times[-1])+resp_latency)
