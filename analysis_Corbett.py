@@ -14,9 +14,10 @@ import numpy as np
 import matplotlib.pyplot as plt
 from probeData import formatFigure
 from visual_behavior.visualization.extended_trials.daily import make_daily_figure
+import pandas as pd
 
 
-probes_to_run = ('C')
+probes_to_run = ('A', 'B', 'C')
 
 def makePSTH(spikes,startTimes,windowDur,binSize=0.1):
     bins = np.arange(0,windowDur+binSize,binSize)
@@ -90,7 +91,7 @@ preTime = 0.1
 postTime = 0.5
 binSize = 0.005
 binCenters = np.arange(-preTime,postTime,binSize)+binSize/2
-image_flash_times = frameRising[np.array(core_data['visual_stimuli']['frame'])]
+image_flash_times = frameTimes[np.array(core_data['visual_stimuli']['frame'])]
 image_id = np.array(core_data['visual_stimuli']['image_name'])
 for pid in probes_to_run:
     plt.close('all')
@@ -154,31 +155,32 @@ ori = np.unique(trial_ori)
 
 #get first frame for this stimulus (first frame after end of behavior session)
 first_rf_frame = trials['endframe'].values[-1] + pre_blank_frames + 1
-rf_frameRising = frameRising[first_rf_frame:]
-trial_start_times = rf_frameRising[np.array([f[0] for f in sweep_frames]).astype(np.int)]
-trial_end_times = rf_frameRising[np.array([f[1] for f in sweep_frames]).astype(np.int)]
+rf_frameTimes = frameTimes[first_rf_frame:]
+trial_start_times = rf_frameTimes[np.array([f[0] for f in sweep_frames]).astype(np.int)]
+trial_end_times = rf_frameTimes[np.array([f[1] for f in sweep_frames]).astype(np.int)]
 resp_latency = 0.05
 preTime = 0
 postTime = 0.5
 binSize = 0.01
 psthSize = np.arange(preTime, postTime, binSize).size
-pid = 'C'
-for u in probeSync.getOrderedUnits(units[pid]):
-    spikes = units[pid][u]['times']
-    #trial_spikes, _ = np.histogram(spikes, bins=np.append(trial_start_times, trial_end_times[-1])+resp_latency)
-    trial_spikes = find_spikes_per_trial(spikes, trial_start_times + resp_latency, trial_start_times+resp_latency+0.2)
-    respMat = np.zeros([xpos.size, ypos.size, ori.size])
-    for (x, y, o, tspikes) in zip(trial_xpos, trial_ypos, trial_ori, trial_spikes):
-        respInd = tuple([np.where(xpos==x)[0][0], np.where(ypos==y)[0][0], np.where(ori==o)[0][0]])
-        respMat[respInd] += tspikes
+for pid in probes_to_run:
+    plt.close('all')
+    for u in probeSync.getOrderedUnits(units[pid]):
+        spikes = units[pid][u]['times']
+        #trial_spikes, _ = np.histogram(spikes, bins=np.append(trial_start_times, trial_end_times[-1])+resp_latency)
+        trial_spikes = find_spikes_per_trial(spikes, trial_start_times + resp_latency, trial_start_times+resp_latency+0.2)
+        respMat = np.zeros([xpos.size, ypos.size, ori.size])
+        for (x, y, o, tspikes) in zip(trial_xpos, trial_ypos, trial_ori, trial_spikes):
+            respInd = tuple([np.where(xpos==x)[0][0], np.where(ypos==y)[0][0], np.where(ori==o)[0][0]])
+            respMat[respInd] += tspikes
+        
+        bestOri = np.unravel_index(np.argmax(respMat), respMat.shape)[-1]
+        fig, ax = plt.subplots()
+        fig.suptitle('Probe ' + pid + ': ' + str(u))    
+        im = ax.imshow(respMat[:, :, bestOri].T, interpolation='none', origin='lower')
+        plt.colorbar(im)
     
-    bestOri = np.unravel_index(np.argmax(respMat), respMat.shape)[-1]
-    fig, ax = plt.subplots()
-    fig.suptitle('Probe ' + pid + ': ' + str(u))    
-    im = ax.imshow(respMat[:, :, bestOri].T, interpolation='none', origin='lower')
-    plt.colorbar(im)
-
-multipage(os.path.join(dataDir, 'rfheatmap_Probe' + pid + '.pdf'))
+    multipage(os.path.join(dataDir, 'rfheatmap_Probe' + pid + '.pdf'))
 
 respMats = np.array(respMats)
 plt.figure(str(resp_latency))

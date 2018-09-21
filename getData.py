@@ -16,11 +16,11 @@ from probeData import formatFigure
 from visual_behavior.visualization.extended_trials.daily import make_daily_figure
 
 
-dataDir = "\\\\allen\\programs\\braintv\\workgroups\\nc-ophys\\corbettb\\Behavior\\09072018_385533"
+dataDir = "\\\\allen\\programs\\braintv\\workgroups\\nc-ophys\\corbettb\\Behavior\\09172018_385533"
 sync_file = glob.glob(os.path.join(dataDir, '*.h5'))[0]
 syncDataset = sync.Dataset(sync_file)
 
-probeIDs = ('C')
+probeIDs = ('C', 'A', 'B')
 
 units = {str(pid): probeSync.getUnitData(dataDir,syncDataset, pid) for pid in probeIDs}
 
@@ -29,11 +29,13 @@ trials, core_data, frameRising, frameFalling, runTime, runSpeed = behavSync.getB
 
 make_daily_figure(trials)
 
+frameTimes = frameFalling
+
 #align trials to sync
 trial_start_frames = np.array(trials['startframe'])
 trial_end_frames = np.array(trials['endframe'])
-trial_start_times = frameRising[trial_start_frames]
-trial_end_times = frameFalling[trial_end_frames]
+trial_start_times = frameTimes[trial_start_frames]
+trial_end_times = frameTimes[trial_end_frames]
 
 # trial info
 autoRewarded = np.array(trials['auto_rewarded']).astype(bool)
