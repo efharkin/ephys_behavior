@@ -10,6 +10,7 @@ import probeSync
 import numpy as np
 import scipy.ndimage
 import matplotlib.pyplot as plt
+from matplotlib import patches
 from matplotlib.backends.backend_pdf import PdfPages
 
 
@@ -103,19 +104,47 @@ for pid in probesToAnalyze:
         
         
 # saccade aligned sdfs
+preTime = 2
+postTime = 2
+sdfSigma = 0.02
+latency = []
+latThresh = 5
+minPtsAboveThresh = 50
+latFilt = np.ones(minPtsAboveThresh)
+peakResp = []
 for pid in probesToAnalyze:
     orderedUnits = probeSync.getOrderedUnits(units[pid]) if len(unitsToAnalyze)<1 else unitsToAnalyze
-    for u in orderedUnits:
+    latency.append(np.full((orderedUnits.size,2),np.nan))
+    peakResp.append(latency[-1].copy())    
+    for i,u in enumerate(orderedUnits):
         spikes = units[pid][u]['times']
         fig = plt.figure(facecolor='w')
         ax = plt.subplot(1,1,1)
         ax.plot([0,0],[0,1000],'k--')
         ymax = 0
-        for saccades,clr in zip((negSaccades,posSaccades),'rb'):
+        for j,(saccades,clr) in enumerate(zip((negSaccades,posSaccades),'rb')):
             saccadeTimes = eyeFrameTimes[saccades]
             sdf,t = getSDF(spikes,saccadeTimes-preTime,preTime+postTime,sigma=sdfSigma)
             ax.plot(t-preTime,sdf,clr)
             ymax = max(ymax,sdf.max())
+            z = sdf-sdf[t<1].mean()
+            z /= sdf[t<1].std()
+            posLat = np.where(np.correlate(z>latThresh,latFilt,mode='valid')==minPtsAboveThresh)[0]
+            posLat = posLat[0] if posLat.size>0 else None
+            negLat = np.where(np.correlate(z<-latThresh,latFilt,mode='valid')==minPtsAboveThresh)[0]
+            negLat = negLat[0] if negLat.size>0 else None
+#            posLat = np.where(z[:np.argmax(z)]<latencyThresh)[0][-1]+1 if z.max()>latencyThresh else None
+#            negLat = np.where(z[:np.argmin(z)]>-latencyThresh)[0][-1]+1 if z.min()<-latencyThresh else None
+            if posLat is not None or negLat is not None:
+                if posLat is None:
+                    latInd = negLat
+                elif negLat is None:
+                    latInd = posLat
+                else:
+                    latInd = min(posLat,negLat)
+                latency[-1][i,j] = t[latInd]-preTime
+                ax.plot(t[latInd]-preTime,sdf[latInd],'o',mfc=clr,mec=clr,ms=10)
+            peakResp[-1][i,j] = z.max() if z.max()>-z.min() else z.min()
         for side in ('right','top'):
             ax.spines[side].set_visible(False)
         ax.tick_params(direction='out',top=False,right=False,labelsize=10)
@@ -127,5 +156,51 @@ for pid in probesToAnalyze:
         plt.tight_layout()
     multipage(os.path.join(dataDir, 'saccadeSDFs_' + pid + '.pdf'))
     plt.close('all')
+    
+
+fig = plt.figure(facecolor='w')
+ax = plt.subplot(1,1,1)
+ax.add_patch(patches.Rectangle([-10,-10],width=20,height=20,color='0.8'))
+ax.plot([-1000,1000],[-1000,1000],'k--')
+amax = 0
+for peak in peakResp:
+    ax.plot(peak[:,0],peak[:,1],'o',mec='k',mfc='none',ms=8,mew=2)
+    amax = max(amax,np.abs(peak).max())
+for side in ('right','top'):
+    ax.spines[side].set_visible(False)
+ax.tick_params(direction='out',top=False,right=False,labelsize=10)
+ax.set_xlabel('Temporal saccade max z score',fontsize=12)
+ax.set_ylabel('Nasal saccade max z score',fontsize=12)
+amax *= 1.02
+ax.set_xlim([-amax,amax])
+ax.set_ylim([-amax,amax])
+ax.set_aspect('equal')
+plt.tight_layout()
+
+fig = plt.figure(facecolor='w')
+ax = plt.subplot(1,1,1)
+for lat,peak in zip(latency,peakResp):
+    for j,clr in enumerate('rb'):
+        ax.plot(lat[:,j],peak[:,j],'o',mec=clr,mfc='none',ms=8,mew=2)
+for side in ('right','top'):
+    ax.spines[side].set_visible(False)
+ax.tick_params(direction='out',top=False,right=False,labelsize=10)
+ax.set_xlabel('Saccade resp latency (s)',fontsize=12)
+ax.set_ylabel('Max z score',fontsize=12)
+plt.tight_layout()
+
+fig = plt.figure(facecolor='w')
+ax = plt.subplot(1,1,1)
+binWidth = 0.05
+bins = np.arange(-preTime,postTime,binWidth)
+for lat,peak,clr in zip(np.concatenate(latency).T,np.concatenate(peakResp).T,'rb'):
+    ax.plot(bins[:-1]+binWidth/2,np.histogram(lat[(~np.isnan(lat)) & (peak>10)],bins)[0],clr,linewidth=2)
+for side in ('right','top'):
+    ax.spines[side].set_visible(False)
+ax.set_xlim([-1,1])
+ax.tick_params(direction='out',top=False,right=False,labelsize=10)
+ax.set_xlabel('Saccade resp latency (s)',fontsize=12)
+ax.set_ylabel('Number of units',fontsize=12)
+plt.tight_layout()
 
 
