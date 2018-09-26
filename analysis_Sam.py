@@ -204,3 +204,62 @@ ax.set_ylabel('Number of units',fontsize=12)
 plt.tight_layout()
 
 
+allSaccadeTimes = eyeFrameTimes[np.sort(np.concatenate((negSaccades,posSaccades)))]
+imageFlashTimes = frameTimes[np.array(core_data['visual_stimuli']['frame'])]
+lat = allSaccadeTimes[allSaccadeTimes<imageFlashTimes[-1],None]-imageFlashTimes
+lat[lat<0] = np.nan
+lat = np.nanmin(lat[~np.isnan(lat).all(axis=1)],axis=1)
+fig = plt.figure(facecolor='w')
+ax = plt.subplot(1,1,1)
+binWidth = 0.05
+bins = np.arange(0,0.75+binWidth,binWidth)
+h = np.histogram(lat,bins)[0].astype(float)/lat.shape[0]
+ax.plot(bins[:-1]+binWidth/2,h,'k',linewidth=2)
+for side in ('right','top'):
+    ax.spines[side].set_visible(False)
+ax.tick_params(direction='out',top=False,right=False,labelsize=10)
+ax.set_xlim([0,0.75])
+ax.set_ylim([0,1.02*h.max()])
+ax.set_xlabel('Time from image flash to saccade (s)',fontsize=12)
+ax.set_ylabel('Fraction of saccades',fontsize=12)
+plt.tight_layout()
+
+
+imageChangeTimes = frameTimes[np.array(trials['change_frame'][~earlyResponse]).astype(int)]
+lat = allSaccadeTimes[allSaccadeTimes<imageChangeTimes[-1],None]-imageChangeTimes
+lat[lat<0] = np.nan
+lat = np.nanmin(lat[~np.isnan(lat).all(axis=1)],axis=1)
+fig = plt.figure(facecolor='w')
+ax = plt.subplot(1,1,1)
+binWidth = 0.5
+bins = np.arange(0,lat.max()+binWidth,binWidth)
+h = np.histogram(lat,bins)[0].astype(float)/lat.shape[0]
+ax.plot(bins[:-1]+binWidth/2,h,'k',linewidth=2)
+for side in ('right','top'):
+    ax.spines[side].set_visible(False)
+ax.tick_params(direction='out',top=False,right=False,labelsize=10)
+ax.set_xlim([0,lat.max()])
+ax.set_ylim([0,1.02*h.max()])
+ax.set_xlabel('Time from image change to saccade (s)',fontsize=12)
+ax.set_ylabel('Fraction of saccades',fontsize=12)
+plt.tight_layout()
+
+
+from sklearn.ensemble import RandomForestRegressor
+
+binWidth = 0.1
+bins = np.arange(0,spikes[-1]+1,binWidth)
+spikes = units['A'][9]['times']
+fr = np.histogram(spikes,bins)[0].astype(float)/binWidth
+psr = np.histogram(eyeFrameTimes[posSaccades],bins)[0].astype(float)/binWidth
+psrmat = np.stack([np.roll(psr, shift) for shift in np.arange(-10, 11)]).T
+nsr = np.histogram(eyeFrameTimes[negSaccades],bins)[0].astype(float)/binWidth
+nsrmat = np.stack([np.roll(nsr, shift) for shift in np.arange(-10, 11)]).T
+
+srmat = np.concatenate((psrmat,nsrmat),axis=1)
+
+rf = RandomForestRegressor(n_estimators=100)
+
+rf.fit(srmat,fr)
+
+
