@@ -16,6 +16,7 @@ from probeData import formatFigure
 from visual_behavior.visualization.extended_trials.daily import make_daily_figure
 import pandas as pd
 import scipy
+from analysis_Sam import getSDF
 
 
 probes_to_run = ('A', 'B', 'C')
@@ -299,6 +300,30 @@ def get_trial_by_time(times, trial_start_times, trial_end_times):
     
     return np.array(trials)
 
+def find_run_transitions(run_signal, run_time, thresh = [1,5], smooth_kernel = 0.5, inter_run_interval = 2, min_run_duration = 3, sample_freq = 60):
+    smooth_kernel = round(smooth_kernel*sample_freq)
+    smooth_kernel = smooth_kernel if np.mod(smooth_kernel, 2) == 1 else smooth_kernel + 1 #must be an odd number for median filter
+    run_speed_smooth =  scipy.signal.medfilt(run_signal, int(smooth_kernel))
+    run_samples = np.where(run_speed_smooth>=thresh[1])[0]
+    run_starts = run_samples[np.insert(np.diff(run_samples)>=inter_run_interval*sample_freq, 0, True)]
+    
+    adjusted_rs = []
+    for rs in run_starts:
+        last_stat_points = np.where(run_speed_smooth[:rs]<=thresh[0])[0]
+        if len(last_stat_points)>0:
+            adjusted = (last_stat_points[-1])
+        else:
+            adjusted = rs
+        
+        if np.median(run_speed_smooth[adjusted:adjusted+min_run_duration*sample_freq]) > thresh[1]:
+            adjusted_rs.append(adjusted)
+    
+    adjusted_rs = np.array(adjusted_rs).astype(np.int)
+    run_start_times = run_time[adjusted_rs]
+    
+    return run_start_times
+     
+
 min_inter_lick_time = 0.5
 lick_times = probeSync.get_sync_line_data(syncDataset, 'lick_sensor')[0]
 first_lick_times = lick_times[np.insert(np.diff(lick_times)>=min_inter_lick_time, 0, True)]
@@ -307,27 +332,59 @@ first_lick_trials = get_trial_by_time(first_lick_times, trial_start_times, trial
 hit_lick_times = first_lick_times[np.where(hit[first_lick_trials])[0]]
 bad_lick_times = first_lick_times[np.where(falseAlarm[first_lick_trials] | earlyResponse[first_lick_trials])[0]]
 
+run_start_times = find_run_transitions(runSpeed, runTime)
+
+preTime = 1
+postTime = 2
+binSize = 0.05
+binCenters = np.arange(-preTime,postTime,binSize)+binSize/2
+plt.close('all')
+for pid in probes_to_run:
+    for u in probeSync.getOrderedUnits(units[pid]):
+        spikes = units[pid][u]['times']
+        hit_psth, t = getSDF(spikes,hit_lick_times-preTime,preTime+postTime)
+        bad_psth, t  = getSDF(spikes,bad_lick_times-preTime,preTime+postTime)
+        
+        fig, ax = plt.subplots(2,1)
+        fig.suptitle('Probe ' + pid + ': ' + str(u))
+        hit, = ax[0].plot(t-1,hit_psth, 'k')
+        bad, = ax[0].plot(t-1, bad_psth, 'r')
+        ax[0].legend((hit, bad), ('hit', 'aborted/FA'), loc='best', prop={'size':8})
+        ax[0].xaxis.set_visible(False)
+        formatFigure(fig, ax[0], yLabel='Lick-Trig. FR (Hz)')
+        ax[0].plot([0,0], ax[0].get_ylim(), 'k--')
+        
+        run_psth, t = getSDF(spikes,run_start_times-preTime,preTime+postTime)
+        ax[1].plot(t-1,run_psth, 'k')
+        ax[1].plot([0,0], ax[1].get_ylim(), 'k--')
+        formatFigure(fig, ax[1], xLabel='Time (s)', yLabel='Run-Trig. FR (Hz)')
+
+    multipage(os.path.join(dataDir, 'lick_run_triggered_psth_' + pid + '.pdf'))
+    plt.close('all')
+
+
+
+
 preTime = 1
 postTime = 1
-binSize = 0.01
+binSize = 0.05
 binCenters = np.arange(-preTime,postTime,binSize)+binSize/2
 for pid in probes_to_run:
     plt.close('all')
     for u in probeSync.getOrderedUnits(units[pid]):
         spikes = units[pid][u]['times']
-        hit_psth = makePSTH(spikes,hit_lick_times-preTime,preTime+postTime,binSize)
-        bad_psth = makePSTH(spikes,bad_lick_times-preTime,preTime+postTime,binSize)
+        run_start_psth = makePSTH(spikes,run_start_times-preTime,preTime+postTime,binSize)
         
         fig, ax = plt.subplots()
         fig.suptitle('Probe ' + pid + ': ' + str(u))
-        hit, = ax.plot(binCenters,hit_psth, 'k')
-        bad, = ax.plot(binCenters, bad_psth, 'r')
-        ax.legend((hit, bad), ('hit', 'aborted/FA'), loc='best')
-        formatFigure(fig, ax, xLabel='Time to lick (s)', yLabel='FR (Hz)')
+        run, = ax.plot(binCenters,run_start_psth, 'k')
+        formatFigure(fig, ax, xLabel='Time to run transition (s)', yLabel='FR (Hz)')
 
-    multipage(os.path.join(dataDir, 'lick_triggered_psth_' + pid + '.pdf'))
+    multipage(os.path.join(dataDir, 'run_triggered_psth_' + pid + '.pdf'))
+plt.close('all')
 
-
-
-
-
+#plt.figure()
+#plt.plot(runSpeed)
+#plt.plot(run_speed_smooth, 'g')
+#plt.plot(run_starts, 5*np.ones(run_starts.size), 'ro')
+#plt.plot(adjusted_rs, 6*np.ones(adjusted_rs.size), 'g*')
