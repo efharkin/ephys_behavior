@@ -8,7 +8,7 @@ Created on Thu Aug 23 11:29:39 2018
 import os
 import probeSync
 import numpy as np
-import scipy.ndimage
+import scipy
 import matplotlib.pyplot as plt
 from matplotlib import patches
 from matplotlib.backends.backend_pdf import PdfPages
@@ -244,6 +244,32 @@ ax.set_xlabel('Time from image change to saccade (s)',fontsize=12)
 ax.set_ylabel('Fraction of saccades',fontsize=12)
 plt.tight_layout()
 
+
+
+# pupil area
+pupilAreaFilt = scipy.signal.medfilt(pupilArea,7)
+
+frameRate = 60.0
+preTime = postTime = 10
+fig = plt.figure(facecolor='w')
+ax = plt.subplot(1,1,1)
+for resp,clr in zip((hit,miss,falseAlarm,correctReject),'krgb'):
+    changeTimes = frameTimes[np.array(trials['change_frame'][~ignore & resp]).astype(int)]
+    alignedPupilArea = np.zeros((changeTimes.size,int(frameRate*(preTime+postTime))))
+    for i,t in enumerate(changeTimes):
+        ind = np.argmin(np.abs(eyeFrameTimes-t))
+        alignedPupilArea[i] = pupilAreaFilt[int(ind-frameRate*preTime):int(ind+frameRate*postTime)]
+    ax.plot(np.arange(0,preTime+postTime,1/frameRate)-preTime,np.nanmean(alignedPupilArea,axis=0),clr)
+for side in ('right','top'):
+    ax.spines[side].set_visible(False)
+ax.tick_params(direction='out',top=False,right=False,labelsize=10)
+ax.set_xlabel('Time relative to image change',fontsize=12)
+ax.set_ylabel('Pupil Area',fontsize=12)
+plt.tight_layout()
+
+
+
+# random forest model
 
 from sklearn.ensemble import RandomForestRegressor
 
