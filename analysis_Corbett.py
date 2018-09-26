@@ -100,6 +100,7 @@ def multipage(filename, figs=None, dpi=200):
     
 
 # make psth for units for all flashes of each image
+
 preTime = 0.1
 postTime = 0.5
 binSize = 0.005
@@ -127,6 +128,30 @@ for pid in probes_to_run:
             if ia < ax.size-1:
                 a.axis('off')
     multipage(os.path.join(dataDir, 'behaviorPSTHs_allflashes_' + pid + '.pdf'))
+    
+def plot_psth_all_flashes(spikes, frameTimes, core_data, axis, preTime = 0.1, postTime = 0.5, sdfSigma=0.005):
+    image_flash_times = frameTimes[np.array(core_data['visual_stimuli']['frame'])]
+    image_id = np.array(core_data['visual_stimuli']['image_name'])
+    imageNames = np.unique(image_id)
+    
+    spikes = units[pid][u]['times']
+    sdfs = []
+    for i,img in enumerate(imageNames):
+        this_image_times = image_flash_times[image_id==img]         
+        sdf, t = getSDF(spikes,this_image_times-preTime,preTime+postTime, sigma=sdfSigma)
+        sdfs.append(sdf)
+        
+    maxFR = np.max(sdfs)
+    for ip, sdf in enumerate(sdfs):
+        axis.plot(t - preTime, sdf + ip*maxFR, 'k')
+        axis.text(postTime*1.05, (ip+0.5)*maxFR, imageNames[ip])  
+    
+    axis.set_yticks([0, round(maxFR+0.5)])
+    axis.spines['left'].set_visible(False)
+    formatFigure(plt.gcf(), axis, xLabel='time to flash (s)', yLabel='FR (Hz)')
+    
+       
+
 
 # sdf for all hit and miss trials    
 preTime = 1.5
@@ -156,6 +181,54 @@ for pid in probes_to_run:
         ax.set_title('Probe '+pid+', Unit '+str(u),fontsize=12)
         plt.tight_layout()
     multipage(os.path.join(dataDir, 'behaviorPSTHs_combined_hits_misses_' + pid + '.pdf'))
+
+def plot_psth_hits_vs_misses(spikes, frameTimes, trials, axis, preTime = 1.5, postTime = 1.5, sdfSigma=0.02, average_across_images=True):
+    autoRewarded = np.array(trials['auto_rewarded']).astype(bool)
+    earlyResponse = np.array(trials['response_type']=='EARLY_RESPONSE')    
+    ignore = earlyResponse | autoRewarded
+    miss = np.array(trials['response_type']=='MISS')
+    hit = np.array(trials['response_type']=='HIT')
+    falseAlarm = np.array(trials['response_type']=='FA')
+    correctReject = np.array(trials['response_type']=='CR')
+    ymax = 0
+    if average_across_images:
+        for resp,clr in zip((hit,miss, falseAlarm, correctReject),'bkrg'):
+            selectedTrials = resp & (~ignore)
+            changeTimes = frameTimes[np.array(trials['change_frame'][selectedTrials]).astype(int)]
+            sdf,t = getSDF(spikes,changeTimes-preTime,preTime+postTime,sigma=sdfSigma)
+            axis.plot(t-preTime,sdf,clr)
+            ymax = max(ymax,sdf.max())
+        
+        axis.set_xlim([-preTime,postTime])
+        axis.set_ylim([0,1.02*ymax])
+        formatFigure(plt.gcf(), axis, xLabel='Time to image change (s)', yLabel='Spikes/s')
+    else:
+        changeImage = np.array(trials['change_image_name'])
+        imageNames = np.unique(changeImage)
+        sdfs = [[] for respType in [hit, miss]]
+        for i,img in enumerate(imageNames):
+            for ir, resp in enumerate([hit, miss]):
+                selectedTrials = resp & (changeImage==img) & (~ignore)
+                changeTimes = frameTimes[np.array(trials['change_frame'][selectedTrials]).astype(int)]
+                sdf,t = getSDF(spikes,changeTimes-preTime,preTime+postTime,sigma=sdfSigma)
+                sdfs[ir].append(sdf)
+        
+        maxFR = np.max(sdfs)
+        clrs = 'bkrg'
+        for im, respsdfs in enumerate(zip(*sdfs)):
+            axis.text(postTime*1.05, (im+0.5)*maxFR, imageNames[im])  
+            for ir, respsdf in enumerate(respsdfs):            
+                axis.plot(t-preTime, respsdf + im*maxFR, clrs[ir])
+        
+        
+        for side in ('right','top'):
+            axis.spines[side].set_visible(False)
+        axis.tick_params(direction='out',top=False,right=False,labelsize=10)
+        axis.set_xlim([-preTime,postTime])
+        axis.set_ylabel('Spikes/s',fontsize=12)
+        axis.set_xlabel('Time relative to image change (s)',fontsize=12)
+        axis.set_yticks([0, round(maxFR+0.5)])
+       
 
 # sdf for hit and miss trials for each image
 for pid in probes_to_run:
