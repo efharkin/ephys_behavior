@@ -100,34 +100,33 @@ def multipage(filename, figs=None, dpi=200):
     
 
 # make psth for units for all flashes of each image
-
-preTime = 0.1
-postTime = 0.5
-binSize = 0.005
-binCenters = np.arange(-preTime,postTime,binSize)+binSize/2
-image_flash_times = frameTimes[np.array(core_data['visual_stimuli']['frame'])]
-image_id = np.array(core_data['visual_stimuli']['image_name'])
-for pid in probes_to_run:
-    plt.close('all')
-    for u in probeSync.getOrderedUnits(units[pid]):
-        fig, ax = plt.subplots(imageNames.size)
-        fig.suptitle('Probe ' + pid + ': ' + str(u))   
-        spikes = units[pid][u]['times']
-        maxFR = 0
-        for i,img in enumerate(imageNames):
-            this_image_times = image_flash_times[image_id==img]         
-            psth = makePSTH(spikes,this_image_times-preTime,preTime+postTime,binSize)
-            maxFR = max(maxFR, psth.max())
-            ax[i].plot(binCenters,psth, 'k')
-        
-        for ia, a in enumerate(ax):
-            a.set_ylim([0, maxFR])
-            a.set_yticks([0, round(maxFR+0.5)])
-            a.text(postTime*1.05, maxFR/2, imageNames[ia])
-            formatFigure(fig, a, xLabel='time (s)', yLabel='FR (Hz)')
-            if ia < ax.size-1:
-                a.axis('off')
-    multipage(os.path.join(dataDir, 'behaviorPSTHs_allflashes_' + pid + '.pdf'))
+#preTime = 0.1
+#postTime = 0.5
+#binSize = 0.005
+#binCenters = np.arange(-preTime,postTime,binSize)+binSize/2
+#image_flash_times = frameTimes[np.array(core_data['visual_stimuli']['frame'])]
+#image_id = np.array(core_data['visual_stimuli']['image_name'])
+#for pid in probes_to_run:
+#    plt.close('all')
+#    for u in probeSync.getOrderedUnits(units[pid]):
+#        fig, ax = plt.subplots(imageNames.size)
+#        fig.suptitle('Probe ' + pid + ': ' + str(u))   
+#        spikes = units[pid][u]['times']
+#        maxFR = 0
+#        for i,img in enumerate(imageNames):
+#            this_image_times = image_flash_times[image_id==img]         
+#            psth = makePSTH(spikes,this_image_times-preTime,preTime+postTime,binSize)
+#            maxFR = max(maxFR, psth.max())
+#            ax[i].plot(binCenters,psth, 'k')
+#        
+#        for ia, a in enumerate(ax):
+#            a.set_ylim([0, maxFR])
+#            a.set_yticks([0, round(maxFR+0.5)])
+#            a.text(postTime*1.05, maxFR/2, imageNames[ia])
+#            formatFigure(fig, a, xLabel='time (s)', yLabel='FR (Hz)')
+#            if ia < ax.size-1:
+#                a.axis('off')
+#    multipage(os.path.join(dataDir, 'behaviorPSTHs_allflashes_' + pid + '.pdf'))
     
 def plot_psth_all_flashes(spikes, frameTimes, core_data, axis, preTime = 0.1, postTime = 0.5, sdfSigma=0.005):
     image_flash_times = frameTimes[np.array(core_data['visual_stimuli']['frame'])]
@@ -144,43 +143,43 @@ def plot_psth_all_flashes(spikes, frameTimes, core_data, axis, preTime = 0.1, po
     maxFR = np.max(sdfs)
     for ip, sdf in enumerate(sdfs):
         axis.plot(t - preTime, sdf + ip*maxFR, 'k')
-        axis.text(postTime*1.05, (ip+0.5)*maxFR, imageNames[ip])  
+        axis.text(postTime*0.85, (ip+0.5)*maxFR, imageNames[ip])  
     
     axis.set_yticks([0, round(maxFR+0.5)])
     axis.spines['left'].set_visible(False)
-    formatFigure(plt.gcf(), axis, xLabel='time to flash (s)', yLabel='FR (Hz)')
+    formatFigure(plt.gcf(), axis, xLabel='time to flash (s)', yLabel='Spikes/s')
     
        
 
 
 # sdf for all hit and miss trials    
-preTime = 1.5
-postTime = 1.5
-sdfSigma = 0.02
-for pid in probes_to_run:
-    plt.close('all')
-    orderedUnits = probeSync.getOrderedUnits(units[pid])
-    for u in orderedUnits:
-        spikes = units[pid][u]['times']
-        fig = plt.figure(facecolor='w')
-        ax = plt.subplot(1,1,1)
-        ymax = 0
-        for resp,clr in zip((hit,miss),'rb'):
-            selectedTrials = resp & (~ignore)
-            changeTimes = frameTimes[np.array(trials['change_frame'][selectedTrials]).astype(int)]
-            sdf,t = getSDF(spikes,changeTimes-preTime,preTime+postTime,sigma=sdfSigma)
-            ax.plot(t-preTime,sdf,clr)
-            ymax = max(ymax,sdf.max())
-        for side in ('right','top'):
-            ax.spines[side].set_visible(False)
-        ax.tick_params(direction='out',top=False,right=False,labelsize=10)
-        ax.set_xlim([-preTime,postTime])
-        ax.set_ylim([0,1.02*ymax])
-        ax.set_xlabel('Time relative to image change (s)',fontsize=12)
-        ax.set_ylabel('Spike/s',fontsize=12)
-        ax.set_title('Probe '+pid+', Unit '+str(u),fontsize=12)
-        plt.tight_layout()
-    multipage(os.path.join(dataDir, 'behaviorPSTHs_combined_hits_misses_' + pid + '.pdf'))
+#preTime = 1.5
+#postTime = 1.5
+#sdfSigma = 0.02
+#for pid in probes_to_run:
+#    plt.close('all')
+#    orderedUnits = probeSync.getOrderedUnits(units[pid])
+#    for u in orderedUnits:
+#        spikes = units[pid][u]['times']
+#        fig = plt.figure(facecolor='w')
+#        ax = plt.subplot(1,1,1)
+#        ymax = 0
+#        for resp,clr in zip((hit,miss),'rb'):
+#            selectedTrials = resp & (~ignore)
+#            changeTimes = frameTimes[np.array(trials['change_frame'][selectedTrials]).astype(int)]
+#            sdf,t = getSDF(spikes,changeTimes-preTime,preTime+postTime,sigma=sdfSigma)
+#            ax.plot(t-preTime,sdf,clr)
+#            ymax = max(ymax,sdf.max())
+#        for side in ('right','top'):
+#            ax.spines[side].set_visible(False)
+#        ax.tick_params(direction='out',top=False,right=False,labelsize=10)
+#        ax.set_xlim([-preTime,postTime])
+#        ax.set_ylim([0,1.02*ymax])
+#        ax.set_xlabel('Time relative to image change (s)',fontsize=12)
+#        ax.set_ylabel('Spike/s',fontsize=12)
+#        ax.set_title('Probe '+pid+', Unit '+str(u),fontsize=12)
+#        plt.tight_layout()
+#    multipage(os.path.join(dataDir, 'behaviorPSTHs_combined_hits_misses_' + pid + '.pdf'))
 
 def plot_psth_hits_vs_misses(spikes, frameTimes, trials, axis, preTime = 1.5, postTime = 1.5, sdfSigma=0.02, average_across_images=True):
     autoRewarded = np.array(trials['auto_rewarded']).astype(bool)
@@ -216,7 +215,7 @@ def plot_psth_hits_vs_misses(spikes, frameTimes, trials, axis, preTime = 1.5, po
         maxFR = np.max(sdfs)
         clrs = 'bkrg'
         for im, respsdfs in enumerate(zip(*sdfs)):
-            axis.text(postTime*1.05, (im+0.5)*maxFR, imageNames[im])  
+#            axis.text(postTime*1.05, (im+0.5)*maxFR, imageNames[im])  
             for ir, respsdf in enumerate(respsdfs):            
                 axis.plot(t-preTime, respsdf + im*maxFR, clrs[ir])
         
@@ -225,41 +224,41 @@ def plot_psth_hits_vs_misses(spikes, frameTimes, trials, axis, preTime = 1.5, po
             axis.spines[side].set_visible(False)
         axis.tick_params(direction='out',top=False,right=False,labelsize=10)
         axis.set_xlim([-preTime,postTime])
-        axis.set_ylabel('Spikes/s',fontsize=12)
+#        axis.set_ylabel('Spikes/s',fontsize=12)
         axis.set_xlabel('Time relative to image change (s)',fontsize=12)
         axis.set_yticks([0, round(maxFR+0.5)])
-       
+        axis.spines['left'].set_visible(False)   
 
 # sdf for hit and miss trials for each image
-for pid in probes_to_run:
-    plt.close('all')
-    orderedUnits = probeSync.getOrderedUnits(units[pid])
-    for u in orderedUnits:
-        spikes = units[pid][u]['times']
-        fig = plt.figure(facecolor='w',figsize=(8,10))
-        axes = []
-        ymax = 0
-        for i,img in enumerate(imageNames):
-            axes.append(plt.subplot(imageNames.size,1,i+1))
-            for resp,clr in zip((hit,miss),'rb'):
-                selectedTrials = resp & (changeImage==img) & (~ignore)
-                changeTimes = frameTimes[np.array(trials['change_frame'][selectedTrials]).astype(int)]
-                sdf,t = getSDF(spikes,changeTimes-preTime,preTime+postTime,sigma=sdfSigma)
-                axes[-1].plot(t-preTime,sdf,clr)
-                ymax = max(ymax,sdf.max())
-        for ax,img in zip(axes,imageNames):
-            for side in ('right','top'):
-                ax.spines[side].set_visible(False)
-            ax.tick_params(direction='out',top=False,right=False,labelsize=10)
-            ax.set_xlim([-preTime,postTime])
-            ax.set_ylim([0,1.02*ymax])
-            ax.set_ylabel(img,fontsize=12)
-            if ax!=axes[-1]:
-                ax.set_xticklabels([])
-        axes[-1].set_xlabel('Time relative to image change (s)',fontsize=12)
-        axes[0].set_title('Probe '+pid+', Unit '+str(u),fontsize=12)
-        plt.tight_layout()
-    multipage(os.path.join(dataDir, 'behaviorPSTHs_image_hits_misses_' + pid + '.pdf'))
+#for pid in probes_to_run:
+#    plt.close('all')
+#    orderedUnits = probeSync.getOrderedUnits(units[pid])
+#    for u in orderedUnits:
+#        spikes = units[pid][u]['times']
+#        fig = plt.figure(facecolor='w',figsize=(8,10))
+#        axes = []
+#        ymax = 0
+#        for i,img in enumerate(imageNames):
+#            axes.append(plt.subplot(imageNames.size,1,i+1))
+#            for resp,clr in zip((hit,miss),'rb'):
+#                selectedTrials = resp & (changeImage==img) & (~ignore)
+#                changeTimes = frameTimes[np.array(trials['change_frame'][selectedTrials]).astype(int)]
+#                sdf,t = getSDF(spikes,changeTimes-preTime,preTime+postTime,sigma=sdfSigma)
+#                axes[-1].plot(t-preTime,sdf,clr)
+#                ymax = max(ymax,sdf.max())
+#        for ax,img in zip(axes,imageNames):
+#            for side in ('right','top'):
+#                ax.spines[side].set_visible(False)
+#            ax.tick_params(direction='out',top=False,right=False,labelsize=10)
+#            ax.set_xlim([-preTime,postTime])
+#            ax.set_ylim([0,1.02*ymax])
+#            ax.set_ylabel(img,fontsize=12)
+#            if ax!=axes[-1]:
+#                ax.set_xticklabels([])
+#        axes[-1].set_xlabel('Time relative to image change (s)',fontsize=12)
+#        axes[0].set_title('Probe '+pid+', Unit '+str(u),fontsize=12)
+#        plt.tight_layout()
+#    multipage(os.path.join(dataDir, 'behaviorPSTHs_image_hits_misses_' + pid + '.pdf'))
 
 ##make psth for units during gratings task
 #traceTime = np.linspace(-2, 10, 120)
@@ -279,53 +278,59 @@ for pid in probes_to_run:
 ##############################
 #######   Analyze RF #########
 #First get stimulus pickle file
-rfstim_pickle_file = glob.glob(os.path.join(dataDir, '*brain_observatory_stimulus.pkl'))[0]
-stim_dict = pd.read_pickle(rfstim_pickle_file)
-pre_blank_frames = int(stim_dict['pre_blank_sec']*stim_dict['fps'])
-rfstim = stim_dict['stimuli'][0]
-
-#extract trial stim info (xpos, ypos, ori)
-sweep_table = np.array(rfstim['sweep_table'])   #table with rfstim parameters, indexed by sweep order to give stim for each trial
-sweep_order = np.array(rfstim['sweep_order'])   #index of stimuli for sweep_table for each trial
-sweep_frames = np.array(rfstim['sweep_frames']) #(start frame, end frame) for each trial
-
-trial_xpos = np.array([pos[0] for pos in sweep_table[sweep_order, 0]])
-trial_ypos = np.array([pos[1] for pos in sweep_table[sweep_order, 0]])
-trial_ori = sweep_table[sweep_order, 3]
-
-xpos = np.unique(trial_xpos)
-ypos = np.unique(trial_ypos)
-ori = np.unique(trial_ori)
-
-#get first frame for this stimulus (first frame after end of behavior session)
-first_rf_frame = trials['endframe'].values[-1] + pre_blank_frames + 1
-rf_frameTimes = frameTimes[first_rf_frame:]
-rf_trial_start_times = rf_frameTimes[np.array([f[0] for f in sweep_frames]).astype(np.int)]
-rf_trial_end_times = rf_frameTimes[np.array([f[1] for f in sweep_frames]).astype(np.int)]
-resp_latency = 0.05
-preTime = 0
-postTime = 0.5
-binSize = 0.01
-psthSize = np.arange(preTime, postTime, binSize).size
-for pid in probes_to_run:
-    plt.close('all')
-    for u in probeSync.getOrderedUnits(units[pid]):
-        spikes = units[pid][u]['times']
-        #trial_spikes, _ = np.histogram(spikes, bins=np.append(trial_start_times, trial_end_times[-1])+resp_latency)
-        trial_spikes = find_spikes_per_trial(spikes, rf_trial_start_times + resp_latency, rf_trial_start_times+resp_latency+0.2)
-        respMat = np.zeros([xpos.size, ypos.size, ori.size])
-        for (x, y, o, tspikes) in zip(trial_xpos, trial_ypos, trial_ori, trial_spikes):
-            respInd = tuple([np.where(xpos==x)[0][0], np.where(ypos==y)[0][0], np.where(ori==o)[0][0]])
-            respMat[respInd] += tspikes
-        
-        bestOri = np.unravel_index(np.argmax(respMat), respMat.shape)[-1]
-        fig, ax = plt.subplots()
-        fig.suptitle('Probe ' + pid + ': ' + str(u))    
-        im = ax.imshow(respMat[:, :, bestOri].T, interpolation='none', origin='lower')
-        plt.colorbar(im)
     
-    multipage(os.path.join(dataDir, 'rfheatmap_Probe' + pid + '.pdf'))
+def get_rf_trial_params(dataDir, stim_dict=None):
 
+    if stim_dict is None:
+        rfstim_pickle_file = glob.glob(os.path.join(dataDir, '*brain_observatory_stimulus.pkl'))[0] 
+        stim_dict = pd.read_pickle(rfstim_pickle_file)
+    
+    pre_blank_frames = int(stim_dict['pre_blank_sec']*stim_dict['fps'])
+    rfstim = stim_dict['stimuli'][0]
+    
+    #extract trial stim info (xpos, ypos, ori)
+    sweep_table = np.array(rfstim['sweep_table'])   #table with rfstim parameters, indexed by sweep order to give stim for each trial
+    sweep_order = np.array(rfstim['sweep_order'])   #index of stimuli for sweep_table for each trial
+    sweep_frames = np.array(rfstim['sweep_frames']) #(start frame, end frame) for each trial
+    
+    trial_xpos = np.array([pos[0] for pos in sweep_table[sweep_order, 0]])
+    trial_ypos = np.array([pos[1] for pos in sweep_table[sweep_order, 0]])
+    trial_ori = sweep_table[sweep_order, 3]
+    
+    xpos = np.unique(trial_xpos)
+    ypos = np.unique(trial_ypos)
+    ori = np.unique(trial_ori)
+    
+    return xpos, ypos, ori, pre_blank_frames
+
+def plot_rf(spikes, frameTimes, trials, dataDir, axis, stim_dict=None, resp_latency=0.05):
+    xpos, ypos, ori, pre_blank_frames = get_rf_trial_params(dataDir, stim_dict)
+    
+    #get first frame for this stimulus (first frame after end of behavior session)
+    first_rf_frame = trials['endframe'].values[-1] + pre_blank_frames + 1
+    rf_frameTimes = frameTimes[first_rf_frame:]
+    rf_trial_start_times = rf_frameTimes[np.array([f[0] for f in sweep_frames]).astype(np.int)]
+    resp_latency = 0.05
+
+    spikes = units[pid][u]['times']
+    trial_spikes = find_spikes_per_trial(spikes, rf_trial_start_times + resp_latency, rf_trial_start_times+resp_latency+0.2)
+    respMat = np.zeros([xpos.size, ypos.size, ori.size])
+    for (x, y, o, tspikes) in zip(trial_xpos, trial_ypos, trial_ori, trial_spikes):
+        respInd = tuple([np.where(xpos==x)[0][0], np.where(ypos==y)[0][0], np.where(ori==o)[0][0]])
+        respMat[respInd] += tspikes
+    
+    bestOri = np.unravel_index(np.argmax(respMat), respMat.shape)[-1]  
+    im = axis.imshow(respMat[:, :, bestOri].T, interpolation='none', origin='lower')
+    plt.colorbar(im)    
+    tickLabels = [str(tick) for tick in np.unique(xpos)[::2]]
+    axis.set_xticks(np.arange(0, len(np.unique(xpos)), 2))
+    axis.set_yticks(np.arange(0, len(np.unique(xpos)), 2))
+    axis.set_xticklabels(tickLabels)
+    axis.set_yticklabels(tickLabels)
+        
+
+        
+    
 respMats = np.array(respMats)
 plt.figure(str(resp_latency))
 plt.imshow(np.mean(np.max(respMats, 3), axis=0), interpolation='none')
@@ -396,68 +401,62 @@ def find_run_transitions(run_signal, run_time, thresh = [1,5], smooth_kernel = 0
     
     return run_start_times
      
-
-min_inter_lick_time = 0.5
-lick_times = probeSync.get_sync_line_data(syncDataset, 'lick_sensor')[0]
-first_lick_times = lick_times[np.insert(np.diff(lick_times)>=min_inter_lick_time, 0, True)]
-first_lick_trials = get_trial_by_time(first_lick_times, trial_start_times, trial_end_times)
-
-hit_lick_times = first_lick_times[np.where(hit[first_lick_trials])[0]]
-bad_lick_times = first_lick_times[np.where(falseAlarm[first_lick_trials] | earlyResponse[first_lick_trials])[0]]
-
-run_start_times = find_run_transitions(runSpeed, runTime)
-
-preTime = 1
-postTime = 2
-binSize = 0.05
-binCenters = np.arange(-preTime,postTime,binSize)+binSize/2
-plt.close('all')
-for pid in probes_to_run:
-    for u in probeSync.getOrderedUnits(units[pid]):
-        spikes = units[pid][u]['times']
-        hit_psth, t = getSDF(spikes,hit_lick_times-preTime,preTime+postTime)
-        bad_psth, t  = getSDF(spikes,bad_lick_times-preTime,preTime+postTime)
+def plot_lick_triggered_fr(spikes, syncDataset, trials, axis, min_inter_lick_time = 0.5, preTime=1, postTime=2):
+    lick_times = probeSync.get_sync_line_data(syncDataset, 'lick_sensor')[0]
+    first_lick_times = lick_times[np.insert(np.diff(lick_times)>=min_inter_lick_time, 0, True)]
+    first_lick_trials = get_trial_by_time(first_lick_times, trial_start_times, trial_end_times)
+    
+    hit = np.array(trials['response_type']=='HIT')
+    earlyResponse = np.array(trials['response_type']=='EARLY_RESPONSE')
+    falseAlarm = np.array(trials['response_type']=='FA')
+    hit_lick_times = first_lick_times[np.where(hit[first_lick_trials])[0]]
+    bad_lick_times = first_lick_times[np.where(falseAlarm[first_lick_trials] | earlyResponse[first_lick_trials])[0]]
+   
+    hit_psth, t = getSDF(spikes,hit_lick_times-preTime,preTime+postTime)
+    bad_psth, t  = getSDF(spikes,bad_lick_times-preTime,preTime+postTime)
+    
+    hit, = axis.plot(t-1,hit_psth, 'k')
+    bad, = axis.plot(t-1, bad_psth, 'r')
+    axis.legend((hit, bad), ('hit', 'aborted/FA'), loc='best', prop={'size':8})
+    formatFigure(plt.gcf(), axis, xLabel='Time to lick (s)',  yLabel='Lick-Trig. FR (Hz)')
+    axis.plot([0,0], axis.get_ylim(), 'k--')
+    
+    
+def plot_run_triggered_fr(spikes, runSpeed, runTime, axis, preTime=1, postTime=2):
+    run_start_times = find_run_transitions(runSpeed, runTime)        
+    run_psth, t = getSDF(spikes,run_start_times-preTime,preTime+postTime)
+    axis.plot(t-1,run_psth, 'k')
+    axis.plot([0,0], axis.get_ylim(), 'k--')
+    formatFigure(fig, axis, xLabel='Time to run (s)', yLabel='Run-Trig. FR (Hz)')
+    
         
-        fig, ax = plt.subplots(2,1)
-        fig.suptitle('Probe ' + pid + ': ' + str(u))
-        hit, = ax[0].plot(t-1,hit_psth, 'k')
-        bad, = ax[0].plot(t-1, bad_psth, 'r')
-        ax[0].legend((hit, bad), ('hit', 'aborted/FA'), loc='best', prop={'size':8})
-        ax[0].xaxis.set_visible(False)
-        formatFigure(fig, ax[0], yLabel='Lick-Trig. FR (Hz)')
-        ax[0].plot([0,0], ax[0].get_ylim(), 'k--')
+##########################
+#### MAKE SUMMARY PLOT####
         
-        run_psth, t = getSDF(spikes,run_start_times-preTime,preTime+postTime)
-        ax[1].plot(t-1,run_psth, 'k')
-        ax[1].plot([0,0], ax[1].get_ylim(), 'k--')
-        formatFigure(fig, ax[1], xLabel='Time (s)', yLabel='Run-Trig. FR (Hz)')
+import matplotlib.gridspec as gridspec
 
-    multipage(os.path.join(dataDir, 'lick_run_triggered_psth_' + pid + '.pdf'))
-    plt.close('all')
+plt.figure()
+gs = gridspec.GridSpec(8, 21)
+gs.update(top=0.95, bottom = 0.35, left=0.05, right=0.95, wspace=0.3)
 
+allflashax = plt.subplot(gs[:, :7])
+plot_psth_all_flashes(spikes, frameTimes, core_data, allflashax)
 
+allrespax = plt.subplot(gs[:, 8:14])
+plot_psth_hits_vs_misses(spikes, frameTimes, trials, allrespax, average_across_images=False)
 
+respax = plt.subplot(gs[:4, 15:])
+plot_psth_hits_vs_misses(spikes, frameTimes, trials, respax, preTime = 0.1, postTime = 0.5, sdfSigma=0.005, average_across_images=True)
 
-preTime = 1
-postTime = 1
-binSize = 0.05
-binCenters = np.arange(-preTime,postTime,binSize)+binSize/2
-for pid in probes_to_run:
-    plt.close('all')
-    for u in probeSync.getOrderedUnits(units[pid]):
-        spikes = units[pid][u]['times']
-        run_start_psth = makePSTH(spikes,run_start_times-preTime,preTime+postTime,binSize)
-        
-        fig, ax = plt.subplots()
-        fig.suptitle('Probe ' + pid + ': ' + str(u))
-        run, = ax.plot(binCenters,run_start_psth, 'k')
-        formatFigure(fig, ax, xLabel='Time to run transition (s)', yLabel='FR (Hz)')
+rfax = plt.subplot(gs[5:, 15:])
+plot_rf(spikes, frameTimes, trials, dataDir, rfax)
 
-    multipage(os.path.join(dataDir, 'run_triggered_psth_' + pid + '.pdf'))
-plt.close('all')
+gs2 = gridspec.GridSpec(1, 4)
+gs2.update(top=0.25, bottom = 0.05, left=0.05, right=0.95, wspace=0.3)
 
-#plt.figure()
-#plt.plot(runSpeed)
-#plt.plot(run_speed_smooth, 'g')
-#plt.plot(run_starts, 5*np.ones(run_starts.size), 'ro')
-#plt.plot(adjusted_rs, 6*np.ones(adjusted_rs.size), 'g*')
+lickax = plt.subplot(gs2[0, 0])
+plot_lick_triggered_fr(spikes, syncDataset, trials, lickax)
+
+runax = plt.subplot(gs2[0, 1])
+plot_run_triggered_fr(spikes, runSpeed, runTime, runax)
+
