@@ -19,13 +19,13 @@ from visual_behavior.translator.foraging2 import data_to_change_detection_core
 from visual_behavior.visualization.extended_trials.daily import make_daily_figure
 
 
-dataDir = "\\\\allen\\programs\\braintv\\workgroups\\nc-ophys\\corbettb\\Behavior\\09172018_385533"
+dataDir = "\\\\allen\\programs\\braintv\\workgroups\\nc-ophys\\corbettb\\Behavior\\09202018_390339"
 sync_file = glob.glob(os.path.join(dataDir, '*.h5'))[0]
 syncDataset = sync.Dataset(sync_file)
 
 
 # get probe data
-probeIDs = ('C', 'A', 'B')
+probeIDs = ('C', 'B')
 units = {str(pid): probeSync.getUnitData(dataDir,syncDataset, pid) for pid in probeIDs}
 
 
@@ -58,13 +58,16 @@ eyeFrameTimes = probeSync.get_sync_line_data(syncDataset,'cam2_exposure')[1]
 #camData = h5py.File(camPath)
 #frameIntervals = camData['frame_intervals'][:]
 
-eyeDataPath = glob.glob(os.path.join(dataDir,'cameras','*_eyetrack_analysis.hdf5'))[0]
-eyeData = h5py.File(eyeDataPath)
-pupilArea = eyeData['pupilArea'][:]
-pupilX = eyeData['pupilX'][:]
-negSaccades = eyeData['negSaccades'][:]
-posSaccades = eyeData['posSaccades'][:]
-
+eyeDataPath = glob.glob(os.path.join(dataDir,'cameras','*_eyetrack_analysis.hdf5'))
+if len(eyeDataPath)>0:
+    eyeData = h5py.File(eyeDataPath[0])
+    pupilArea = eyeData['pupilArea'][:]
+    pupilX = eyeData['pupilX'][:]
+    negSaccades = eyeData['negSaccades'][:]
+    posSaccades = eyeData['posSaccades'][:]
+else:
+    eyeData = None
+    
 
 # align trials to sync
 trial_start_frames = np.array(trials['startframe'])
