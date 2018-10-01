@@ -40,8 +40,9 @@ def extract_barcodes_from_times(on_times, off_times, inter_barcode_interval=10,
     ignores first code in prod (ok, but not intended)
     ignores first on pulse (intended - this is needed to identify that a barcode is starting)
     '''
-
-
+    if len(on_times)>len(off_times):
+        on_times = on_times[:-1]
+    
     start_indices = np.diff(on_times)
     a = np.where(start_indices > inter_barcode_interval)[0]
     barcode_start_times = on_times[a+1]
