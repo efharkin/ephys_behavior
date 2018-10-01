@@ -96,6 +96,7 @@ def load_spike_info(spike_data_dir, p_sampleRate, shift):
     cluster_ids = pd.read_csv(os.path.join(spike_data_dir, 'cluster_groups.csv'), sep='\t')
     templates = np.load(os.path.join(spike_data_dir, 'templates.npy'))
     spike_templates = np.load(os.path.join(spike_data_dir, 'spike_templates.npy'))
+    channel_positions = np.load(os.path.join(spike_data_dir, 'channel_positions.npy'))
     unit_ids = np.unique(spike_clusters)
     
     units = {}
@@ -113,6 +114,7 @@ def load_spike_info(spike_data_dir, p_sampleRate, shift):
         chosen_templates = spike_templates[chosen_spikes].flatten()
         units[u]['template'] = np.mean(templates[chosen_templates], axis=0)
         units[u]['peakChan'] = np.unravel_index(np.argmin(units[u]['template']), units[u]['template'].shape)[1]
+        units[u]['position'] = channel_positions[units[u]['peakChan']]
     return units
 
 
