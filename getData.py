@@ -5,9 +5,8 @@ Created on Thu Aug 23 11:29:39 2018
 @author: svc_ccg
 """
 
-import os
-import glob
-import h5py
+import os, glob, h5py, nrrd
+from xml.dom import minidom
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
@@ -19,7 +18,7 @@ from visual_behavior.translator.foraging2 import data_to_change_detection_core
 from visual_behavior.visualization.extended_trials.daily import make_daily_figure
 
 
-dataDir = "\\\\allen\\programs\\braintv\\workgroups\\nc-ophys\\corbettb\\Behavior\\09202018_390339"
+dataDir = "\\\\allen\\programs\\braintv\\workgroups\\nc-ophys\\corbettb\\Behavior\\09172018_385533"
 sync_file = glob.glob(os.path.join(dataDir, '*.h5'))[0]
 syncDataset = sync.Dataset(sync_file)
 
@@ -27,6 +26,30 @@ syncDataset = sync.Dataset(sync_file)
 # get probe data
 probeIDs = ('A', 'C', 'B')
 units = {str(pid): probeSync.getUnitData(dataDir,syncDataset, pid) for pid in probeIDs}
+
+
+# get unit CCF positions
+probeCCFFile = glob.glob(os.path.join(dataDir,'histology','probePosCCF_*.xlsx'))[0]
+probeCCF = pd.read_excel(probeCCFFile,sheetname=dataDir[-15:-7])
+
+ccfDir = '\\\\allen\\programs\\braintv\\workgroups\\nc-ophys\\corbettb\\CCF'            
+annotationStructures = minidom.parse(os.path.join(ccfDir,'annotationStructures.xml'))
+annotationData = nrrd.read(os.path.join(ccfDir,'annotation_25.nrrd'))[0].transpose((1,2,0))
+
+tipLength = 201
+for pid in probeIDs:
+    entry,tip = [np.array(probeCCF[pid+' '+loc]) for loc in ('entry','tip')]
+    for u in units[pid]:
+        distFromTip = tipLength+units[pid][u]['position'][1]
+        dx,dy,dz = [entry[i]-tip[i] for i in range(3)]
+        trackLength = (dx**2+dy**2+dz**2)**0.5
+        units[pid][u]['ccf'] = tip+np.array([distFromTip*d/trackLength for d in (dx,dy,dz)])
+        units[pid][u]['ccfID'] = annotationData[tuple(int(units[pid][u]['ccf'][c]/25) for c in (1,0,2))]
+        units[pid][u]['ccfRegion'] = None
+        for ind,structID in enumerate(annotationStructures.getElementsByTagName('id')):
+            if int(structID.childNodes[0].nodeValue)==units[pid][u]['ccfID']:
+                units[pid][u]['ccfRegion'] = annotationStructures.getElementsByTagName('structure')[ind].childNodes[7].childNodes[0].nodeValue[1:-1]
+                break
 
 
 # get behavior data
