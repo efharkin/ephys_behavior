@@ -506,7 +506,12 @@ def all_unit_summary(probesToAnalyze, units, dataDir, runSpeed, runTime):
 def plot_unit_summary(pid, uid, units, run_start_times, rfstim, pre_blank_frames, multipageObj=None):
     spikes = units[pid][uid]['times']
     fig = plt.figure(facecolor='w', figsize=(16,12))
-    fig.suptitle('Probe: ' + str(pid) + ', unit: ' + str(uid))
+    if 'ccfRegion' in units[pid][uid] and units[pid][uid]['ccfRegion'] is not None:
+        figtitle = 'Probe: ' + str(pid) + ', unit: ' + str(uid) + ' ' + units[pid][uid]['ccfRegion']
+    else:
+        figtitle = 'Probe: ' + str(pid) + ', unit: ' + str(uid)
+        
+    fig.suptitle(figtitle)
     
     gs = gridspec.GridSpec(8, 21)
     gs.update(top=0.95, bottom = 0.35, left=0.05, right=0.95, wspace=0.3)
