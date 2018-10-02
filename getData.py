@@ -29,8 +29,8 @@ units = {str(pid): probeSync.getUnitData(dataDir,syncDataset, pid) for pid in pr
 
 
 # get unit CCF positions
-probeCCFFile = glob.glob(os.path.join(dataDir,'probePosCCF_*.xlsx'))[0]
-probeCCF = pd.read_excel(probeCCFFile,sheetname=dataDir[-15:-7])
+probeCCFFile = glob.glob(os.path.join(dataDir,'probePosCCF*.xlsx'))[0]
+probeCCF = pd.read_excel(probeCCFFile)
 
 ccfDir = '\\\\allen\\programs\\braintv\\workgroups\\nc-ophys\\corbettb\\CCF'            
 annotationStructures = minidom.parse(os.path.join(ccfDir,'annotationStructures.xml'))
