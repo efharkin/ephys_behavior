@@ -109,3 +109,19 @@ correctReject = np.array(trials['response_type']=='CR')
 initialImage = np.array(trials['initial_image_name'])
 changeImage = np.array(trials['change_image_name'])
 imageNames = np.unique(changeImage)
+
+
+
+probeIDs = ('A', 'C', 'B')
+lfp = {str(pid): probeSync.getLFPData(dataDir, pid, syncDataset) for pid in probeIDs}
+
+
+
+
+
+
+
+
+
+
+
