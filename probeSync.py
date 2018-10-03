@@ -136,8 +136,8 @@ def getOrderedUnits(units, label=['good']):
     return goodUnits[np.argsort(peakChans)]
     
     
-def getLFPdata(dataDir, pid, num_channels=384):
-    probeDir =  glob.glob(os.path.join(dataDir,'*Probe'+probeID+'_sorted'))[0]       
+def getLFPdata(dataDir, pid, syncDataset, num_channels=384):
+    probeDir =  glob.glob(os.path.join(dataDir,'*Probe'+pid+'_sorted'))[0]       
     lfp_data_dir = os.path.join(probeDir,'continuous\\Neuropix-3a-100.1')
     lfp_data_file = os.path.join(lfp_data_dir, 'continuous.dat')    
         
@@ -148,7 +148,26 @@ def getLFPdata(dataDir, pid, num_channels=384):
     lfp_data = np.memmap(lfp_data_file, dtype='int16', mode='r')    
     lfp_data_reshape = np.reshape(lfp_data, [int(lfp_data.size/num_channels), -1])
     
-    return lfp_data_reshape
+    time_stamps = np.load(os.path.join(lfp_data_dir, 'lfp_timestamps.npy'))    
     
+    #Get barcodes from sync file
+    bRising, bFalling = get_sync_line_data(syncDataset, 'barcode')
+    bs_t, bs = ecephys.extract_barcodes_from_times(bRising, bFalling)
+    
+    #Get barcodes from ephys data
+    channel_states = np.load(os.path.join(probeDir,'events\\Neuropix-3a-100.0\\TTL_1\\channel_states.npy'))
+    event_times = np.load(os.path.join(probeDir,'events\\Neuropix-3a-100.0\\TTL_1\\event_timestamps.npy'))
+    
+    beRising = event_times[channel_states>0]/30000.
+    beFalling = event_times[channel_states<0]/30000.
+    be_t, be = ecephys.extract_barcodes_from_times(beRising, beFalling)
+    
+    #Compute time shift between ephys and sync
+    shift, p_sampleRate, m_endpoints = ecephys.get_probe_time_offset(bs_t, bs, be_t, be, 0, 30000)    
+    
+    time_stamps_shifted = (time_stamps/p_sampleRate) - shift
+    
+    return lfp_data_reshape, time_stamps_shifted
+
     
     
