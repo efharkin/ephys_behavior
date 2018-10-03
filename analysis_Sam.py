@@ -45,7 +45,7 @@ preTime = 1.5
 postTime = 1.5
 sdfSigma = 0.02
 
-probesToAnalyze = ['A','B','C']
+probesToAnalyze = ['A']
 unitsToAnalyze = []
 
 # sdf for all hit and miss trials
@@ -101,6 +101,39 @@ for pid in probesToAnalyze:
         axes[-1].set_xlabel('Time relative to image change (s)',fontsize=12)
         axes[0].set_title('Probe '+pid+', Unit '+str(u),fontsize=12)
         plt.tight_layout()
+
+
+# raster aligned to each image change
+for pid in probesToAnalyze:
+    pdf = PdfPages(os.path.join(dataDir,'raster_'+ pid+'.pdf'))
+    orderedUnits = probeSync.getOrderedUnits(units[pid]) if len(unitsToAnalyze)<1 else unitsToAnalyze
+    for u in orderedUnits:
+        spikes = units[pid][u]['times']
+        fig = plt.figure(facecolor='w',figsize=(8,10))
+        for i,img in enumerate(imageNames):
+            ax = plt.subplot(imageNames.size,1,i+1)
+            selectedTrials = (changeImage==img) & (~ignore)
+            changeTimes = frameTimes[np.array(trials['change_frame'][selectedTrials]).astype(int)]
+            for row,(trialIndex,t) in enumerate(zip(np.where(selectedTrials)[0],changeTimes)):
+                ax.vlines(spikes[(spikes>=t-preTime) & (spikes<=t+postTime)]-t,row-0.4,row+0.4,color='k')
+                licks = frameTimes[np.array(trials['lick_frames'][trialIndex]).astype(int)]-t
+                ax.plot(licks,row+np.zeros(licks.size),'o',mec='0.5',mfc='none',ms=1)
+                reward = frameTimes[np.array(trials['reward_frames'][trialIndex]).astype(int)]-t
+                ax.plot(reward,row+np.zeros(reward.size),'o',mec='r',mfc='none',ms=2)
+            for side in ('right','top'):
+                ax.spines[side].set_visible(False)
+            ax.tick_params(direction='out',top=False,right=False,labelsize=10)
+            ax.set_xlim([-preTime,postTime])
+            ax.set_ylim([-1,row+1])
+            if i==imageNames.size-1:
+                ax.set_xlabel('Time relative to image change (s)',fontsize=12)
+            if i==0:
+                ax.set_ylabel('Trial',fontsize=12)
+                ax.set_title('Probe '+pid+', Unit '+str(u),fontsize=12)
+        plt.tight_layout()
+        fig.savefig(pdf,format='pdf')
+        plt.close(fig)
+    pdf.close()
         
         
 # saccade aligned sdfs
