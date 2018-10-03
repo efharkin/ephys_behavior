@@ -134,3 +134,21 @@ def getOrderedUnits(units, label=['good']):
     goodUnits = np.array([key for key in units if units[key]['label'] in label])
     peakChans = [units[u]['peakChan'] for u in goodUnits]
     return goodUnits[np.argsort(peakChans)]
+    
+    
+def getLFPdata(dataDir, pid, num_channels=384):
+    probeDir =  glob.glob(os.path.join(dataDir,'*Probe'+probeID+'_sorted'))[0]       
+    lfp_data_dir = os.path.join(probeDir,'continuous\\Neuropix-3a-100.1')
+    lfp_data_file = os.path.join(lfp_data_dir, 'continuous.dat')    
+        
+    if not os.path.exists(lfp_data_file):
+        print('Could not find LFP data at ' + lfp_data_file)
+        return
+    
+    lfp_data = np.memmap(lfp_data_file, dtype='int16', mode='r')    
+    lfp_data_reshape = np.reshape(lfp_data, [int(lfp_data.size/num_channels), -1])
+    
+    return lfp_data_reshape
+    
+    
+    

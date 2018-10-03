@@ -17,7 +17,7 @@ import pandas as pd
 import scipy
 
 
-probes_to_run = ('B', 'C')
+probes_to_run = ('A', 'B', 'C')
 
 def getSDF(spikes,startTimes,windowDur,sigma=0.02,sampInt=0.001,avg=True):
         t = np.arange(0,windowDur+sampInt,sampInt)
@@ -150,8 +150,20 @@ def plot_psth_all_flashes(spikes, frameTimes, core_data, axis, preTime = 0.1, po
     formatFigure(plt.gcf(), axis, xLabel='time to flash (s)', yLabel='Spikes/s')
     
        
-
-
+def make_psth_all_flashes(spikes, frameTimes, core_data, preTime = 0.1, postTime = 0.5, sdfSigma=0.005):
+    image_flash_times = frameTimes[np.array(core_data['visual_stimuli']['frame'])]
+    image_id = np.array(core_data['visual_stimuli']['image_name'])
+    imageNames = np.unique(image_id)
+    
+    sdfs = []
+    for i,img in enumerate(imageNames):
+        this_image_times = image_flash_times[image_id==img]         
+        sdf, t = getSDF(spikes,this_image_times-preTime,preTime+postTime, sigma=sdfSigma)
+        sdfs.append(sdf)
+        
+    return np.array(sdfs)
+    
+    
 # sdf for all hit and miss trials    
 #preTime = 1.5
 #postTime = 1.5
@@ -506,7 +518,12 @@ def all_unit_summary(probesToAnalyze, units, dataDir, runSpeed, runTime):
 def plot_unit_summary(pid, uid, units, run_start_times, rfstim, pre_blank_frames, multipageObj=None):
     spikes = units[pid][uid]['times']
     fig = plt.figure(facecolor='w', figsize=(16,12))
-    fig.suptitle('Probe: ' + str(pid) + ', unit: ' + str(uid))
+    if 'ccfRegion' in units[pid][uid] and units[pid][uid]['ccfRegion'] is not None:
+        figtitle = 'Probe: ' + str(pid) + ', unit: ' + str(uid) + ' ' + units[pid][uid]['ccfRegion']
+    else:
+        figtitle = 'Probe: ' + str(pid) + ', unit: ' + str(uid)
+        
+    fig.suptitle(figtitle)
     
     gs = gridspec.GridSpec(8, 21)
     gs.update(top=0.95, bottom = 0.35, left=0.05, right=0.95, wspace=0.3)
@@ -538,3 +555,63 @@ def plot_unit_summary(pid, uid, units, run_start_times, rfstim, pre_blank_frames
         fig.savefig(multipageObj, format='pdf')
     
     plt.close(fig)
+    
+    
+import clust
+ 
+responseTensor = []
+responseRegion = []
+regionsToConsider = ['LP', 'LD', 'VIS']
+for pid in probes_to_run:
+    for u in probeSync.getOrderedUnits(units[pid]):
+        region = units[pid][u]['ccfRegion']
+        if region is not None and any([r in region for r in regionsToConsider]):
+            spikes = units[pid][u]['times']
+            sdf = make_psth_all_flashes(spikes, frameTimes, core_data)
+            responseTensor.append(sdf)
+            responseRegion.append(region)
+            
+            
+            
+responseTensor = np.array(responseTensor)
+
+nbytrial = np.reshape(responseTensor, [-1, responseTensor.shape[2]])
+nbytrial_standardized = clust.standardizeData(nbytrial)            
+#nbytrial_standardized = nbytrial - np.mean(nbytrial[:, :100], 1)[:, None]
+#nbytrial_standardized = nbytrial/np.max(np.abs(nbytrial), 1)[:, None]
+nbytrial_pca, nbytrial_eVal, nbytrial_eVec = clust.pca(nbytrial_standardized, True)   
+timeComponents = nbytrial_eVec.T
+
+plt.figure()
+plt.plot(np.dot(nbytrial_eVec, nbytrial_pca[1]))
+plt.plot(nbytrial[1])
+
+fig, ax = plt.subplots(5, 1)
+for i, e in enumerate(timeComponents[:5]):
+    ax[i].plot(e)
+
+
+ncattrial = np.reshape(responseTensor, [responseTensor.shape[0], -1])
+ncattrial_standardized = clust.standardizeData(ncattrial)            
+ncattrial_pca, ncattrial_eVal, ncattrial_eVec = clust.pca(ncattrial_standardized)   
+timeComponents = ncattrial_eVec.T
+
+fig, ax = plt.subplots(5, 1)
+for i, e in enumerate(timeComponents[:5]):
+    ax[i].plot(e)         
+            
+            
+from sklearn.decomposition import FastICA, PCA
+ica_nbytrial = FastICA(n_components=3)
+nbytrial_ica = ica_nbytrial.fit_transform(ncattrial_standardized.T)
+
+fig, ax = plt.subplots(5, 1)
+for i, e in enumerate(nbytrial_ica.T):
+    ax[i].plot(-e)     
+            
+pca = PCA(n_components=3)
+nbytrial_pca = pca.fit_transform(ncattrial_standardized.T)     
+
+fig, ax = plt.subplots(5, 1)
+for i, e in enumerate(nbytrial_pca.T):
+    ax[i].plot(e)   
