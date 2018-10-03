@@ -18,7 +18,7 @@ from visual_behavior.translator.foraging2 import data_to_change_detection_core
 from visual_behavior.visualization.extended_trials.daily import make_daily_figure
 
 
-dataDir = "\\\\allen\\programs\\braintv\\workgroups\\nc-ophys\\corbettb\\Behavior\\09172018_385533"
+dataDir = "\\\\allen\\programs\\braintv\\workgroups\\nc-ophys\\corbettb\\Behavior\\09202018_390339"
 sync_file = glob.glob(os.path.join(dataDir, '*.h5'))[0]
 syncDataset = sync.Dataset(sync_file)
 
