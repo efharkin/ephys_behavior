@@ -45,7 +45,7 @@ preTime = 1.5
 postTime = 1.5
 sdfSigma = 0.02
 
-probesToAnalyze = ['A']
+probesToAnalyze = ['A','B','C']
 unitsToAnalyze = []
 
 # sdf for all hit and miss trials
@@ -105,7 +105,7 @@ for pid in probesToAnalyze:
 
 # raster aligned to each image change
 for pid in probesToAnalyze:
-    pdf = PdfPages(os.path.join(dataDir,'raster_'+ pid+'.pdf'))
+    pdf = PdfPages(os.path.join(dataDir,'imageChangeRaster_'+ pid+'.pdf'))
     orderedUnits = probeSync.getOrderedUnits(units[pid]) if len(unitsToAnalyze)<1 else unitsToAnalyze
     for u in orderedUnits:
         spikes = units[pid][u]['times']
@@ -115,21 +115,24 @@ for pid in probesToAnalyze:
             selectedTrials = (changeImage==img) & (~ignore)
             changeTimes = frameTimes[np.array(trials['change_frame'][selectedTrials]).astype(int)]
             for row,(trialIndex,t) in enumerate(zip(np.where(selectedTrials)[0],changeTimes)):
-                ax.vlines(spikes[(spikes>=t-preTime) & (spikes<=t+postTime)]-t,row-0.4,row+0.4,color='k')
                 licks = frameTimes[np.array(trials['lick_frames'][trialIndex]).astype(int)]-t
-                ax.plot(licks,row+np.zeros(licks.size),'o',mec='0.5',mfc='none',ms=1)
+                ax.plot(licks,row+np.ones(licks.size),'o',mec='0.5',mfc='none',ms=2)
                 reward = frameTimes[np.array(trials['reward_frames'][trialIndex]).astype(int)]-t
-                ax.plot(reward,row+np.zeros(reward.size),'o',mec='r',mfc='none',ms=2)
+                ax.plot(reward,row+np.ones(reward.size),'o',mec='r',mfc='r',ms=2)
+                ax.vlines(spikes[(spikes>=t-preTime) & (spikes<=t+postTime)]-t,row+0.6,row+1.4,color='k')
             for side in ('right','top'):
                 ax.spines[side].set_visible(False)
             ax.tick_params(direction='out',top=False,right=False,labelsize=10)
             ax.set_xlim([-preTime,postTime])
-            ax.set_ylim([-1,row+1])
+            ax.set_ylim([0,row+2])
+            ax.set_yticks([1,row+1])
+            ax.set_ylabel(img,fontsize=12)
+            if i==0:
+                ax.set_title('Probe '+pid+', Unit '+str(u)+', '+units[pid][u]['ccfRegion'],fontsize=12)
             if i==imageNames.size-1:
                 ax.set_xlabel('Time relative to image change (s)',fontsize=12)
-            if i==0:
-                ax.set_ylabel('Trial',fontsize=12)
-                ax.set_title('Probe '+pid+', Unit '+str(u),fontsize=12)
+            else:
+                ax.set_xticklabels([])
         plt.tight_layout()
         fig.savefig(pdf,format='pdf')
         plt.close(fig)

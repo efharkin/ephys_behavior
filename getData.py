@@ -29,27 +29,31 @@ units = {str(pid): probeSync.getUnitData(dataDir,syncDataset, pid) for pid in pr
 
 
 # get unit CCF positions
-probeCCFFile = glob.glob(os.path.join(dataDir,'probePosCCF*.xlsx'))[0]
-probeCCF = pd.read_excel(probeCCFFile)
-
-ccfDir = '\\\\allen\\programs\\braintv\\workgroups\\nc-ophys\\corbettb\\CCF'            
-annotationStructures = minidom.parse(os.path.join(ccfDir,'annotationStructures.xml'))
-annotationData = nrrd.read(os.path.join(ccfDir,'annotation_25.nrrd'))[0].transpose((1,2,0))
-
-tipLength = 201
-for pid in probeIDs:
-    entry,tip = [np.array(probeCCF[pid+' '+loc]) for loc in ('entry','tip')]
-    for u in units[pid]:
-        distFromTip = tipLength+units[pid][u]['position'][1]
-        dx,dy,dz = [entry[i]-tip[i] for i in range(3)]
-        trackLength = (dx**2+dy**2+dz**2)**0.5
-        units[pid][u]['ccf'] = tip+np.array([distFromTip*d/trackLength for d in (dx,dy,dz)])
-        units[pid][u]['ccfID'] = annotationData[tuple(int(units[pid][u]['ccf'][c]/25) for c in (1,0,2))]
-        units[pid][u]['ccfRegion'] = None
-        for ind,structID in enumerate(annotationStructures.getElementsByTagName('id')):
-            if int(structID.childNodes[0].nodeValue)==units[pid][u]['ccfID']:
-                units[pid][u]['ccfRegion'] = annotationStructures.getElementsByTagName('structure')[ind].childNodes[7].childNodes[0].nodeValue[1:-1]
-                break
+probeCCFFile = glob.glob(os.path.join(dataDir,'probePosCCF*.xlsx'))
+if len(probeCCFFile)>0:
+    probeCCF = pd.read_excel(probeCCFFile[0])
+    ccfDir = '\\\\allen\\programs\\braintv\\workgroups\\nc-ophys\\corbettb\\CCF'            
+    annotationStructures = minidom.parse(os.path.join(ccfDir,'annotationStructures.xml'))
+    annotationData = nrrd.read(os.path.join(ccfDir,'annotation_25.nrrd'))[0].transpose((1,2,0))
+    tipLength = 201
+    for pid in probeIDs:
+        entry,tip = [np.array(probeCCF[pid+' '+loc]) for loc in ('entry','tip')]
+        for u in units[pid]:
+            distFromTip = tipLength+units[pid][u]['position'][1]
+            dx,dy,dz = [entry[i]-tip[i] for i in range(3)]
+            trackLength = (dx**2+dy**2+dz**2)**0.5
+            units[pid][u]['ccf'] = tip+np.array([distFromTip*d/trackLength for d in (dx,dy,dz)])
+            units[pid][u]['ccfID'] = annotationData[tuple(int(units[pid][u]['ccf'][c]/25) for c in (1,0,2))]
+            units[pid][u]['ccfRegion'] = None
+            for ind,structID in enumerate(annotationStructures.getElementsByTagName('id')):
+                if int(structID.childNodes[0].nodeValue)==units[pid][u]['ccfID']:
+                    units[pid][u]['ccfRegion'] = annotationStructures.getElementsByTagName('structure')[ind].childNodes[7].childNodes[0].nodeValue[1:-1]
+                    break
+else:
+    for pid in probeIDs:
+        for u in units[pid]:
+            for key in ('ccf','ccfID','ccfRegion'):
+                units[pid][u][key] = None
 
 
 # get behavior data
