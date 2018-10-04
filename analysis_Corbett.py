@@ -556,7 +556,21 @@ def plot_unit_summary(pid, uid, units, run_start_times, rfstim, pre_blank_frames
     
     plt.close(fig)
     
-    
+
+
+
+
+
+
+
+
+
+
+
+
+
+####################################
+#### PCA (or some other technique) to understand response patterns
 import clust
  
 responseTensor = []
