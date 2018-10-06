@@ -17,7 +17,7 @@ import pandas as pd
 import scipy
 
 
-probes_to_run = ('A', 'B', 'C')
+probes_to_run = ('A', 'B')
 
 def getSDF(spikes,startTimes,windowDur,sigma=0.02,sampInt=0.001,avg=True):
         t = np.arange(0,windowDur+sampInt,sampInt)
@@ -557,8 +557,35 @@ def plot_unit_summary(pid, uid, units, run_start_times, rfstim, pre_blank_frames
     plt.close(fig)
     
 
+#####################
+##### Behavior summary stuff
+min_inter_lick_time = 0.5
+lick_times = probeSync.get_sync_line_data(syncDataset, 'lick_sensor')[0]
+first_lick_times = lick_times[np.insert(np.diff(lick_times)>=min_inter_lick_time, 0, True)]
+
+autoRewarded = np.array(trials['auto_rewarded']).astype(bool)
+earlyResponse = np.array(trials['response_type']=='EARLY_RESPONSE')    
+ignore = earlyResponse | autoRewarded
+hit = np.array(trials['response_type']=='HIT')
+
+#Histogram of lick times for hit trials
+preTime = 1
+postTime = 1.5
+binsize = 0.01
+binsLocations = np.arange(-preTime, postTime+binsize, binsize)
+fig, ax = plt.subplots()
+for licks,clr in zip((lick_times,first_lick_times),'kr'):
+    selectedTrials = hit & (~ignore)
+    changeTimes = frameTimes[np.array(trials['change_frame'][selectedTrials]).astype(int)]
+    psth = makePSTH(licks, changeTimes-preTime, preTime+postTime, binsize)
+    ax.bar(np.linspace(-preTime, postTime-binsize, psth.size), psth, binsize, color=clr, alpha=0.5, edgecolor='none')
+
+
+
+#######################
+####### LFP STUFF
 def find_nearest_timepoint(time, timeseries):
-    return np.abs((timeseries - time)).argmin()
+    return np.where(timeseries<time)[0][-1]
 
 presTimes = frameTimes[np.array(core_data['visual_stimuli']['frame'])]   
 flash_lfp = []
@@ -630,7 +657,26 @@ plt.figure()
 for il, first_lick in enumerate(first_lick_times):
     plt.plot(lick_times-first_lick, il*np.ones(lick_times.size), '.')
     
-    
+
+# compute spike triggered average of lfp for one unit
+spikes = units['A'][248]['times']
+peakchan = units['A'][248]['peakChan']
+preTime = 2500
+postTime = 2500
+lfp_spike_times = np.searchsorted(alfp_time.T, spikes).flatten()
+lfp_spike_times = lfp_spike_times[(lfp_spike_times>preTime) & (lfp_spike_times<alfp.shape[0]-postTime)]
+indexer = lfp_spike_times[:, None] + np.arange(-preTime, postTime)
+stlfp = np.zeros(preTime+postTime)
+[np.sum([stlfp, alfp[l, peakchan]], axis=0, out=stlfp) for l in indexer]
+stlfp /= lfp_spike_times.size
+plt.figure()
+plt.plot(stlfp)
+
+
+
+stlfp /= lfp_spike_times.size
+plt.figure()
+plt.plot(stlfp)
 
 ####################################
 #### PCA (or some other technique) to understand response patterns
