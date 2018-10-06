@@ -556,7 +556,84 @@ def plot_unit_summary(pid, uid, units, run_start_times, rfstim, pre_blank_frames
     
     plt.close(fig)
     
+
+def find_nearest_timepoint(time, timeseries):
+    return np.abs((timeseries - time)).argmin()
+
+presTimes = frameTimes[np.array(core_data['visual_stimuli']['frame'])]   
+flash_lfp = []
+for pres in presTimes:
+    index = find_nearest_timepoint(pres, alfp_time)
+    flash_lfp.append(alfp[index-2500:index+2500, 220])
+
+flash_lfp = np.array(flash_lfp)
+plt.figure()
+plt.plot(np.mean(flash_lfp, 0))    
     
+
+
+autoRewarded = np.array(trials['auto_rewarded']).astype(bool)
+earlyResponse = np.array(trials['response_type']=='EARLY_RESPONSE')    
+ignore = earlyResponse | autoRewarded
+miss = np.array(trials['response_type']=='MISS')
+hit = np.array(trials['response_type']=='HIT')
+falseAlarm = np.array(trials['response_type']=='FA')
+correctReject = np.array(trials['response_type']=='CR')
+
+plt.figure()
+for resp,clr in zip((hit,miss, falseAlarm, correctReject),'bkrg'):
+    selectedTrials = resp & (~ignore)
+    changeTimes = frameTimes[np.array(trials['change_frame'][selectedTrials]).astype(int)]
+    lfp_changeTimes = np.array([find_nearest_timepoint(t, alfp_time) for t in changeTimes])
+    resp_lfp = [alfp[lfp_changeTime-2500:lfp_changeTime+2500, 102] for lfp_changeTime in lfp_changeTimes]
+    plotline, = plt.plot(np.linspace(-1, 1, resp_lfp[0].size), np.mean(resp_lfp,0),clr)
+    
+
+
+trial_start_frames = np.array(trials['startframe'])
+trial_end_frames = np.array(trials['endframe'])
+trial_start_times = frameTimes[trial_start_frames]
+trial_end_times = frameTimes[trial_end_frames]
+
+lick_times = probeSync.get_sync_line_data(syncDataset, 'lick_sensor')[0]
+first_lick_times = lick_times[np.insert(np.diff(lick_times)>=min_inter_lick_time, 0, True)]
+first_lick_trials = get_trial_by_time(first_lick_times, trial_start_times, trial_end_times)
+
+hit = np.array(trials['response_type']=='HIT')
+earlyResponse = np.array(trials['response_type']=='EARLY_RESPONSE')
+falseAlarm = np.array(trials['response_type']=='FA')
+hit_lick_times = first_lick_times[np.where(hit[first_lick_trials])[0]]
+bad_lick_times = first_lick_times[np.where(falseAlarm[first_lick_trials] | earlyResponse[first_lick_trials])[0]]
+
+hit_lfp_times = np.array([find_nearest_timepoint(t, alfp_time) for t in hit_lick_times])
+hit_lfp = [alfp[lfp_changeTime-2500:lfp_changeTime+2500, 220] for lfp_changeTime in hit_lfp_times]
+
+bad_lfp_times = np.array([find_nearest_timepoint(t, alfp_time) for t in bad_lick_times])
+bad_lfp = [alfp[lfp_changeTime-2500:lfp_changeTime+2500, 220] for lfp_changeTime in bad_lfp_times]
+
+hitspect = []
+for time in hit_lfp_times:
+    lfpseg = alfp[time-10000:time+10000, 220]
+    f, t, sxx = scipy.signal.spectrogram(lfpseg, fs=2500, nperseg=5000, noverlap=4999)
+    hitspect.append(sxx[:200])
+
+plt.figure()
+plt.pcolormesh(t, f[:200], np.mean(hitspect, 0))
+
+
+
+plt.figure()
+plt.plot(np.linspace(-1, 1, hit_lfp[0].size), np.mean(hit_lfp,0), 'b')
+plt.plot(np.linspace(-1, 1, bad_lfp[0].size), np.mean(bad_lfp,0), 'r')
+
+plt.figure()
+for il, first_lick in enumerate(first_lick_times):
+    plt.plot(lick_times-first_lick, il*np.ones(lick_times.size), '.')
+    
+    
+
+####################################
+#### PCA (or some other technique) to understand response patterns
 import clust
  
 responseTensor = []
