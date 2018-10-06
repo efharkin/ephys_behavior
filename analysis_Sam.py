@@ -5,6 +5,7 @@ Created on Thu Aug 23 11:29:39 2018
 @author: svc_ccg
 """
 
+from __future__ import division
 import os
 import probeSync
 import numpy as np
@@ -39,22 +40,107 @@ def getSDF(spikes,startTimes,windowDur,sigma=0.02,sampInt=0.001,avg=True):
             sdf = sdf.mean(axis=0)
         sdf /= sampInt
         return sdf,t[:-1]
-
-
+        
+        
 preTime = 1.5
 postTime = 1.5
 sdfSigma = 0.02
+        
+        
+# behavior summary
+startFrame = int(trials['startframe'][0])
+startTime = frameTimes[startFrame]
+endFrame = int(trials['endframe'][hit.size-1])
+endTime = frameTimes[endFrame]   
 
+fig = plt.figure(facecolor='w',figsize=(18,10))
+ax = plt.subplot(3,1,1)
+selectedTrials = ~earlyResponse
+changeTimes = frameTimes[np.array(trials['change_frame'][selectedTrials]).astype(int)]
+for trialIndex,t in zip(np.where(selectedTrials)[0],changeTimes):
+    licks = frameTimes[np.array(trials['lick_frames'][trialIndex]).astype(int)]-t
+    ax.plot(t-startTime+np.zeros(licks.size),licks,'o',mec='0.5',mfc='none',ms=3)
+    reward = frameTimes[np.array(trials['reward_frames'][trialIndex]).astype(int)]-t
+    m = 's' if autoRewarded[trialIndex] else 'o'
+    ax.plot(t-startTime+np.zeros(reward.size),reward,m,mec='0.5',mfc='0.5',ms=3)
+for resp,clr in zip((hit,miss,falseAlarm,correctReject),'bkrg'):
+    ax.plot(changeTimes[resp[selectedTrials]],-0.125+np.zeros(resp.sum()),'s',mec=clr,mfc='none',ms=3)
+for side in ('right','top'):
+    ax.spines[side].set_visible(False)
+ax.tick_params(direction='out',top=False,right=False,labelsize=10)
+ax.set_xlim([0,endTime-startTime])
+ax.set_ylim([-0.25,postTime])
+ax.set_ylabel('Time relative to image change (s)',fontsize=12)
+
+ax = plt.subplot(3,1,2)
+for resp,clr,lbl in zip((hit,miss,falseAlarm,correctReject),'bkrg',('hit','miss','false alarm','correct reject')):
+    ax.plot(changeTimes-startTime,np.cumsum(resp[selectedTrials]),clr,label=lbl)
+for side in ('right','top'):
+    ax.spines[side].set_visible(False)
+ax.tick_params(direction='out',top=False,right=False,labelsize=10)
+ax.set_xlim([0,endTime-startTime])
+ax.set_ylabel('Count',fontsize=12)
+ax.legend()
+
+ax = plt.subplot(3,1,3)
+window = 300*60
+interval = 60*60
+dframes = np.arange(int(startFrame+window),int(endFrame),int(interval))
+hitProb = np.full(dframes.size,np.nan)
+falseAlarmProb = np.full(dframes.size,np.nan)
+d = np.full(dframes.size,np.nan)
+for i,f in enumerate(dframes):
+    h,m,fa,cr = [np.sum((trials['change_frame'][r]>=f-window) & (trials['change_frame'][r]<f)) for r in (hit,miss,falseAlarm,correctReject)]
+    hitProb[i] = h/(h+m)
+    if hitProb[i]==1:
+        hitProb[i] = 1-0.5/(h+m)
+    elif hitProb[i]==0:
+        hitProb[i] = 0.5/(h+m)
+    falseAlarmProb[i] = fa/(fa+cr)
+    if falseAlarmProb[i]==1:
+        falseAlarmProb[i] = 1-0.5/(fa+cr)
+    elif falseAlarmProb[i]==0:
+        falseAlarmProb[i] = 0.5/(fa+cr)
+    d[i] = scipy.stats.norm.ppf(hitProb[i])-scipy.stats.norm.ppf(falseAlarmProb[i])
+ax.plot(frameTimes[dframes]-startTime,hitProb,'b',label='hit')
+ax.plot(frameTimes[dframes]-startTime,falseAlarmProb,'k',label='false alarm')
+for side in ('right','top'):
+    ax.spines[side].set_visible(False)
+ax.tick_params(direction='out',top=False,right=False,labelsize=10)
+ax.set_xlim([0,endTime-startTime])
+ax.set_ylim([0,1])
+ax.set_ylabel('Probability',fontsize=12)
+ax.set_xlabel('Time of image change (s)',fontsize=12)
+ax.legend()
+
+plt.tight_layout()
+
+
+
+# licks aligned to non-change flashes
+flashFrames = np.array(core_data['visual_stimuli']['frame'])
+flashFrames = np.setdiff1d(np.array(core_data['visual_stimuli']['frame']),trials['change_frame']+1)
+flashTimes = frameTimes[flashFrames]
+lickTimes = probeSync.get_sync_line_data(syncDataset,'lick_sensor')[0]
+
+fig = plt.figure(facecolor='w')
+ax = plt.subplot(1,1,1)
+for row,t in enumerate(flashTimes):
+    ax.vlines(lickTimes[(lickTimes>=t-preTime) & (lickTimes<=t+postTime)]-t,row+0.6,row+1.4,color='k')
+
+
+
+
+
+# sdf for all hit and miss trials
 probesToAnalyze = ['A','B','C']
 unitsToAnalyze = []
 
-# sdf for all hit and miss trials
 for pid in probesToAnalyze:
     orderedUnits = probeSync.getOrderedUnits(units[pid]) if len(unitsToAnalyze)<1 else unitsToAnalyze
     for u in orderedUnits:
         spikes = units[pid][u]['times']
-        fig = plt.figure(facecolor='w')
-        ax = plt.subplot(1,1,1)
+        
         ymax = 0
         for resp,clr in zip((hit,miss),'rb'):
             selectedTrials = resp & (~ignore)
