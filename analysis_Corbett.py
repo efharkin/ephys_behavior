@@ -607,13 +607,38 @@ hit = np.array(trials['response_type']=='HIT')
 falseAlarm = np.array(trials['response_type']=='FA')
 correctReject = np.array(trials['response_type']=='CR')
 
-plt.figure()
-for resp,clr in zip((hit,miss, falseAlarm, correctReject),'bkrg'):
+cortical_channels = np.unique([units['A'][u]['peakChan'] for u in units['A'] if units['A'][u]['ccfRegion'] is not None and 'VIS' in units['A'][u]['ccfRegion']])
+preTime = 5000
+postTime = 5000
+resp_sxx = []
+for resp,clr in zip((hit,miss),'bkrg'):
     selectedTrials = resp & (~ignore)
     changeTimes = frameTimes[np.array(trials['change_frame'][selectedTrials]).astype(int)]
-    lfp_changeTimes = np.array([find_nearest_timepoint(t, alfp_time) for t in changeTimes])
-    resp_lfp = [alfp[lfp_changeTime-2500:lfp_changeTime+2500, 102] for lfp_changeTime in lfp_changeTimes]
-    plotline, = plt.plot(np.linspace(-1, 1, resp_lfp[0].size), np.mean(resp_lfp,0),clr)
+#    lfp_changeTimes = np.array([find_nearest_timepoint(t, alfp_time) for t in changeTimes])
+    lfp_changeTimes = np.searchsorted(alfp_time.T, changeTimes).flatten()
+    indexer = lfp_changeTimes[:, None] + np.arange(-preTime, postTime)
+    chan_sxx = []
+    for chan in cortical_channels:
+        print chan
+        resp_lfp = alfp[indexer, chan]
+        mean_sub_resp_lfp = resp_lfp - np.mean(resp_lfp, 0)[None,:]
+        sxx_all = []
+        for r in mean_sub_resp_lfp:
+            f, t, sxx = scipy.signal.spectrogram(r, fs=2500, nperseg=2500, noverlap=2490)
+            sxx_all.append(sxx)
+        chan_sxx.append(np.mean(sxx_all, 0))
+    #    resp_lfp = np.zeros(preTime+postTime)
+    #    [np.sum([resp_lfp, alfp[l, peakchan]], axis=0, out=resp_lfp) for l in indexer]
+    #    resp_lfp /= changeTimes.size
+    resp_sxx.append(np.array(chan_sxx))
+
+pretrial_power_hit = np.mean(resp_sxx[0][:, :, 375:400], axis=(0,2))
+pretrial_power_miss = np.mean(resp_sxx[1][:, :, 375:400], axis=(0,2))
+plt.figure()
+plt.plot(f, pretrial_power_hit)
+plt.plot(f, pretrial_power_miss, 'k')
+plt.figure()
+plt.plot(f, pretrial_power_hit/pretrial_power_miss)
     
 
 
@@ -659,18 +684,38 @@ for il, first_lick in enumerate(first_lick_times):
     
 
 # compute spike triggered average of lfp for one unit
-spikes = units['A'][248]['times']
-peakchan = units['A'][248]['peakChan']
+pid = 'A'
+u = 121
+lfpsig = lfp[pid][0]
+lfptime = lfp[pid][1]
+spikes = units[pid][u]['times'].flatten()
+if spikes.size > 5000:
+    spikes = np.random.choice(spikes, 5000, False)
+    
+peakchan = units[pid][u]['peakChan']
 preTime = 2500
 postTime = 2500
-lfp_spike_times = np.searchsorted(alfp_time.T, spikes).flatten()
-lfp_spike_times = lfp_spike_times[(lfp_spike_times>preTime) & (lfp_spike_times<alfp.shape[0]-postTime)]
+lfp_spike_times = np.searchsorted(lfptime.T, spikes).flatten()
+lfp_spike_times = lfp_spike_times[(lfp_spike_times>preTime) & (lfp_spike_times<lfpsig.shape[0]-postTime)]
 indexer = lfp_spike_times[:, None] + np.arange(-preTime, postTime)
 stlfp = np.zeros(preTime+postTime)
-[np.sum([stlfp, alfp[l, peakchan]], axis=0, out=stlfp) for l in indexer]
+[np.sum([stlfp, lfpsig[l, peakchan]], axis=0, out=stlfp) for l in indexer]
 stlfp /= lfp_spike_times.size
-plt.figure()
+plt.figure(u)
 plt.plot(stlfp)
+
+
+fig, ax = plt.subplots()
+engagement_end = 2500
+for period in ([lfptime[0], engagement_end], [engagement_end, 3600]):
+    lfp_period_start = np.where(lfptime<=period[0])[0][-1]
+    lfp_period_end = np.where(lfptime<=period[1])[0][-1]
+    period_spike_times = lfp_spike_times[(lfp_spike_times>preTime+lfp_period_start) & (lfp_spike_times<lfp_period_end-postTime)]
+    indexer = period_spike_times[:, None] + np.arange(-preTime, postTime)
+    stlfp = np.zeros(preTime+postTime)
+    [np.sum([stlfp, lfpsig[l, peakchan]], axis=0, out=stlfp) for l in indexer]
+    stlfp /= period_spike_times.size
+    ax.plot(stlfp)
 
 
 
