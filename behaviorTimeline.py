@@ -11,6 +11,7 @@ import glob
 import datetime
 import numpy as np
 import pandas as pd
+import matplotlib.pyplot as plt
 from visual_behavior.translator.foraging2 import data_to_change_detection_core
 from visual_behavior.translator.core import create_extended_dataframe
 
@@ -42,6 +43,7 @@ rewardsEarned = []
 lastEngaged = []
 probEngaged = []
 trainingDate = []
+trainingStage = []
 for pklFile in  glob.glob(os.path.join(pickleDir,mouseID,'*.pkl')):
     try:
         core_data = data_to_change_detection_core(pd.read_pickle(pklFile))
@@ -83,15 +85,17 @@ for pklFile in  glob.glob(os.path.join(pickleDir,mouseID,'*.pkl')):
         probEngaged.append(0)
         
     trainingDate.append(datetime.datetime.strptime(os.path.basename(pklFile)[:6],'%y%m%d'))
+    trainingStage.append(trials['stage'])
     
 t = np.array([(d-min(trainingDate)).days+1 for d in trainingDate])
+isImages = np.array(['images' in s[0] for s in trainingStage])
 isEphys = np.array([d in ephysDates for d in trainingDate])
 
 fig = plt.figure(facecolor='w',figsize=(8,10))
 for i,(prm,ymax,lbl) in enumerate(zip((rewardsEarned,lastEngaged,probEngaged),(None,3660,1),('Rewards Earned','Last Engaged (s)','Probability Engaged'))):
     ax = plt.subplot(3,1,i+1)
-    for ind,clr in zip((~isEphys,isEphys),'kr'):
-        ax.plot(t[ind],np.array(prm)[ind],'o',mec=clr,mfc=clr,ms=8)
+    for ind,clr,mrk in zip(((~isImages) & (~isEphys),(~isImages & isEphys),(isImages & (~isEphys)),(isImages & isEphys)),'krkr','ssoo'):
+        ax.plot(t[ind],np.array(prm)[ind],mrk,mec=clr,mfc=clr,ms=8)
     for side in ('right','top'):
         ax.spines[side].set_visible(False)
     ax.tick_params(direction='out',top=False,right=False,labelsize=12)
@@ -106,10 +110,5 @@ for i,(prm,ymax,lbl) in enumerate(zip((rewardsEarned,lastEngaged,probEngaged),(N
 plt.tight_layout()
     
     
-
-
-
-
-
-
+    
 
