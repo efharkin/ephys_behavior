@@ -15,7 +15,7 @@ from probeData import formatFigure
 from visual_behavior.visualization.extended_trials.daily import make_daily_figure
 import pandas as pd
 import scipy
-
+import clust
 
 probes_to_run = ('A', 'B')
 
@@ -135,20 +135,41 @@ def plot_psth_all_flashes(spikes, frameTimes, core_data, axis, preTime = 0.1, po
     imageNames = np.unique(image_id)
     
     sdfs = []
+    latencies = []
     for i,img in enumerate(imageNames):
         this_image_times = image_flash_times[image_id==img]         
         sdf, t = getSDF(spikes,this_image_times-preTime,preTime+postTime, sigma=sdfSigma)
+        latency = find_latency(sdf[:int(1000*(preTime+0.25+0.05))], int(preTime*1000), 5)
+        latencies.append(latency)
         sdfs.append(sdf)
         
     maxFR = np.max(sdfs)
     for ip, sdf in enumerate(sdfs):
         axis.plot(t - preTime, sdf + ip*maxFR, 'k')
+        if ~np.isnan(latencies[ip]):
+            axis.plot(latencies[ip]/1000. - preTime, sdf[latencies[ip]]+ip*maxFR, 'ro')
         axis.text(postTime*0.85, (ip+0.5)*maxFR, imageNames[ip])  
     
     axis.set_yticks([0, round(maxFR+0.5)])
     axis.spines['left'].set_visible(False)
     formatFigure(plt.gcf(), axis, xLabel='time to flash (s)', yLabel='Spikes/s')
+   
+def find_latency(signal, baseline_end = 100, stdev_thresh = 3, min_points_above_thresh=30):
+    thresh = stdev_thresh*np.std(signal[:baseline_end]) + np.mean(signal[:baseline_end])   
+    over_std = np.where(signal>thresh)[0]
+
+    if len(over_std)==0:
+        return np.nan
     
+    counter = 1
+    cand = over_std[0]
+    while any(signal[cand:cand+min_points_above_thresh]<thresh):
+        cand = over_std[counter]
+        counter += 1
+        if counter==len(over_std):
+            return np.nan
+    
+    return cand
        
 def make_psth_all_flashes(spikes, frameTimes, core_data, preTime = 0.1, postTime = 0.5, sdfSigma=0.005):
     image_flash_times = frameTimes[np.array(core_data['visual_stimuli']['frame'])]
@@ -156,12 +177,45 @@ def make_psth_all_flashes(spikes, frameTimes, core_data, preTime = 0.1, postTime
     imageNames = np.unique(image_id)
     
     sdfs = []
+    latencies = []
     for i,img in enumerate(imageNames):
         this_image_times = image_flash_times[image_id==img]         
         sdf, t = getSDF(spikes,this_image_times-preTime,preTime+postTime, sigma=sdfSigma)
+        latency = find_latency(sdf[:int(1000*(preTime+0.25+0.05))], int(preTime*1000), 5)
+        latencies.append(latency)
         sdfs.append(sdf)
         
-    return np.array(sdfs)
+    return np.array(sdfs), np.array(latencies)
+    
+def compute_lifetime_sparseness(spikes, frameTimes, core_data, preTime = 0.1, postTime = 0.5, sdfSigma=0.005, latency=0.05):
+    sdfs,_ = make_psth_all_flashes(spikes, frameTimes, core_data, preTime, postTime, sdfSigma)
+    meanResps = np.mean(sdfs[:, int(1000*(preTime+latency)):int(1000*(preTime+latency+0.25))], 1)
+    meanBaselines = np.mean(sdfs[:, 0:int(1000*preTime+latency/2)], 1)
+    
+    stimResps = meanResps-meanBaselines    
+    
+    sumsquared = np.sum(stimResps)**2
+    sumofsquares = np.sum(stimResps**2)
+    
+    N = sdfs.shape[0]
+    
+    Sl = (1 - (sumsquared/sumofsquares)/N)/(1-1/N)
+    
+    return Sl
+    
+sl = []
+regionsToConsider = ['VIS']
+for u in probeSync.getOrderedUnits(units[pid]):
+    spikes = units[pid][u]['times']
+    slu = compute_lifetime_sparseness(spikes, frameTimes, core_data)     
+    units[pid][u]['lifetime_sparseness'] = slu
+
+    region = units[pid][u]['ccfRegion']    
+    if region is not None and any([r in region for r in regionsToConsider]):
+        sl.append(slu)
+
+plt.figure()
+plt.hist(sl)
     
     
 # sdf for all hit and miss trials    
@@ -597,7 +651,9 @@ flash_lfp = np.array(flash_lfp)
 plt.figure()
 plt.plot(np.mean(flash_lfp, 0))    
     
-
+pid = 'B'
+lfpsig = lfp[pid][0]
+lfptime = lfp[pid][1]
 
 autoRewarded = np.array(trials['auto_rewarded']).astype(bool)
 earlyResponse = np.array(trials['response_type']=='EARLY_RESPONSE')    
@@ -607,7 +663,7 @@ hit = np.array(trials['response_type']=='HIT')
 falseAlarm = np.array(trials['response_type']=='FA')
 correctReject = np.array(trials['response_type']=='CR')
 
-cortical_channels = np.unique([units['A'][u]['peakChan'] for u in units['A'] if units['A'][u]['ccfRegion'] is not None and 'VIS' in units['A'][u]['ccfRegion']])
+cortical_channels = np.unique([units[pid][u]['peakChan'] for u in units[pid] if units[pid][u]['ccfRegion'] is not None and 'VIS' in units[pid][u]['ccfRegion']])
 preTime = 5000
 postTime = 5000
 resp_sxx = []
@@ -647,15 +703,52 @@ trial_end_frames = np.array(trials['endframe'])
 trial_start_times = frameTimes[trial_start_frames]
 trial_end_times = frameTimes[trial_end_frames]
 
-lick_times = probeSync.get_sync_line_data(syncDataset, 'lick_sensor')[0]
-first_lick_times = lick_times[np.insert(np.diff(lick_times)>=min_inter_lick_time, 0, True)]
-first_lick_trials = get_trial_by_time(first_lick_times, trial_start_times, trial_end_times)
+#min_inter_lick_time = 0.05
+#lick_times = probeSync.get_sync_line_data(syncDataset, 'lick_sensor')[0]
+#first_lick_times = lick_times[np.insert(np.diff(lick_times)>=min_inter_lick_time, 0, True)]
+#first_lick_trials = get_trial_by_time(first_lick_times, trial_start_times, trial_end_times)
 
 hit = np.array(trials['response_type']=='HIT')
+miss = np.array(trials['response_type']=='MISS')
 earlyResponse = np.array(trials['response_type']=='EARLY_RESPONSE')
 falseAlarm = np.array(trials['response_type']=='FA')
-hit_lick_times = first_lick_times[np.where(hit[first_lick_trials])[0]]
-bad_lick_times = first_lick_times[np.where(falseAlarm[first_lick_trials] | earlyResponse[first_lick_trials])[0]]
+#hit_lick_times = first_lick_times[np.where(hit[first_lick_trials])[0]]
+#bad_lick_times = first_lick_times[np.where(falseAlarm[first_lick_trials] | earlyResponse[first_lick_trials])[0]]
+
+hit_lfps = []
+miss_lfps = []
+pxx_hits = []
+pxx_misses = []
+
+for chan in cortical_channels:
+    chanstd = np.std(lfp[pid][0][:, chan])
+    
+    #exclude dead channels
+    if chanstd > 200:
+        hit_lfp = get_spike_triggered_lfp(trial_start_times[hit], chan, lfp[pid][0], lfp[pid][1], preTime=2, postTime=0, standardize=False)
+        miss_lfp = get_spike_triggered_lfp(trial_start_times[miss], chan, lfp[pid][0], lfp[pid][1], preTime=2, postTime=0, standardize=False)
+        
+        hit_lfp = scipy.signal.medfilt(hit_lfp, 11)
+        miss_lfp = scipy.signal.medfilt(miss_lfp, 11)
+        
+        f, pxx_hit = scipy.signal.welch(hit_lfp, fs = 2500, nperseg=1250)
+        f, pxx_miss = scipy.signal.welch(miss_lfp, fs = 2500, nperseg=1250)
+        
+        hit_lfps.append(hit_lfp)
+        miss_lfps.append(miss_lfp)
+        pxx_hits.append(pxx_hit)
+        pxx_misses.append(pxx_miss)
+
+maxlfp = np.max(hit_lfps)
+fig, ax = plt.subplots()
+for ih, hlfp in enumerate(hit_lfps):
+    ax.plot(hlfp+ih*maxlfp, 'k')
+        
+
+fig, ax = plt.subplots()
+ax.plot(f, np.log(np.mean(pxx_hits, 0)/np.mean(pxx_misses,0)))
+ax.set_xlim([0, 100])
+
 
 hit_lfp_times = np.array([find_nearest_timepoint(t, alfp_time) for t in hit_lick_times])
 hit_lfp = [alfp[lfp_changeTime-2500:lfp_changeTime+2500, 220] for lfp_changeTime in hit_lfp_times]
@@ -665,7 +758,7 @@ bad_lfp = [alfp[lfp_changeTime-2500:lfp_changeTime+2500, 220] for lfp_changeTime
 
 hitspect = []
 for time in hit_lfp_times:
-    lfpseg = alfp[time-10000:time+10000, 220]
+    lfpseg = alfp[time-10000:time+10000, 221]
     f, t, sxx = scipy.signal.spectrogram(lfpseg, fs=2500, nperseg=5000, noverlap=4999)
     hitspect.append(sxx[:200])
 
@@ -684,44 +777,83 @@ for il, first_lick in enumerate(first_lick_times):
     
 
 # compute spike triggered average of lfp for one unit
-pid = 'A'
-u = 121
-lfpsig = lfp[pid][0]
-lfptime = lfp[pid][1]
-spikes = units[pid][u]['times'].flatten()
-if spikes.size > 5000:
-    spikes = np.random.choice(spikes, 5000, False)
+def get_spike_triggered_lfp(spikes, peakchan, lfpsig, lfptime, preTime=1, postTime=1, max_spike_num=5000, standardize=True):
+    spikes = spikes.flatten()
+    if spikes.size > max_spike_num:
+        spikes = np.random.choice(spikes, max_spike_num, False)    
     
+    preTime *= 2500
+    postTime *= 2500    
+    
+    u_lfpsig = np.copy(lfpsig[:, peakchan])
+    if standardize:
+        u_lfpsig = u_lfpsig - u_lfpsig.mean()
+        u_lfpsig /= np.std(u_lfpsig)
+    
+    lfp_spike_times = np.searchsorted(lfptime.T, spikes).flatten()
+    lfp_spike_times = lfp_spike_times[(lfp_spike_times>preTime) & (lfp_spike_times<lfpsig.shape[0]-postTime)]
+    indexer = lfp_spike_times[:, None] + np.arange(-preTime, postTime)
+    stlfp = np.zeros(preTime+postTime)
+    [np.sum([stlfp, u_lfpsig[l]], axis=0, out=stlfp) for l in indexer]
+    
+    return stlfp/lfp_spike_times.size
+    
+
+spikes = units[pid][u]['times'].flatten()
 peakchan = units[pid][u]['peakChan']
-preTime = 2500
-postTime = 2500
-lfp_spike_times = np.searchsorted(lfptime.T, spikes).flatten()
-lfp_spike_times = lfp_spike_times[(lfp_spike_times>preTime) & (lfp_spike_times<lfpsig.shape[0]-postTime)]
-indexer = lfp_spike_times[:, None] + np.arange(-preTime, postTime)
-stlfp = np.zeros(preTime+postTime)
-[np.sum([stlfp, lfpsig[l, peakchan]], axis=0, out=stlfp) for l in indexer]
-stlfp /= lfp_spike_times.size
+
+stlfp = get_spike_triggered_lfp(spikes, peakchan, lfpsig, lfptime)
 plt.figure(u)
 plt.plot(stlfp)
 
+regionsToConsider = ['VIS']
+engagement_end = 2500
+for u in probeSync.getOrderedUnits(units[pid]):
+    print u
+    spikes = units[pid][u]['times']
+    peakchan = units[pid][u]['peakChan']
+    region = units[pid][u]['ccfRegion']
+    if region is not None and any([r in region for r in regionsToConsider]):
+        stlfp = get_spike_triggered_lfp(spikes[spikes<3600], peakchan, lfpsig, lfptime)
+        units[pid][u]['spike_triggered_lfp'] = stlfp
+
+        matched_spike_num = np.min([np.sum((spikes<engagement_end)&(spikes>lfptime[0])), np.sum((spikes>engagement_end) & (spikes<3600))])
+        for period, name in zip(([lfptime[0], engagement_end], [engagement_end, 3600]), ('engaged_', 'nonengaged_')):
+            period_spikes = np.random.choice(spikes[(spikes>period[0]) & (spikes<period[1])], matched_spike_num, False)
+            stlfp = get_spike_triggered_lfp(period_spikes, peakchan, lfpsig, lfptime)
+            units[pid][u][name+'spike_triggered_lfp'] = stlfp
+            
+for u in probeSync.getOrderedUnits(units[pid]):
+    region = units[pid][u]['ccfRegion']
+    if region is not None and any([r in region for r in regionsToConsider]):    
+        plt.figure(u)
+        plt.plot(units[pid][u]['engaged_spike_triggered_lfp'])
+        plt.plot(units[pid][u]['nonengaged_spike_triggered_lfp'])
+
+pratios = []
+e_stlfps = []
+ne_stlfps = []
+for u in probeSync.getOrderedUnits(units[pid]):
+    region = units[pid][u]['ccfRegion']
+    if region is not None and any([r in region for r in regionsToConsider]):    
+        fig, ax = plt.subplots()
+        fig.suptitle(str(u))
+        estlfp = scipy.signal.medfilt(units[pid][u]['engaged_spike_triggered_lfp'], 11)
+        nestlfp = scipy.signal.medfilt(units[pid][u]['nonengaged_spike_triggered_lfp'], 11)
+
+        e_stlfps.append(estlfp)
+        ne_stlfps.append(nestlfp)        
+        
+        f, pxx_e = scipy.signal.welch(estlfp, fs = 2500, nperseg=1250)
+        f, pxx_ne = scipy.signal.welch(nestlfp, fs = 2500, nperseg=1250)
+        
+        pratios.append(np.log(pxx_e/pxx_ne))
+        ax.plot(f, np.log(pxx_e/pxx_ne))
+        ax.set_xlim([0, 100])
 
 fig, ax = plt.subplots()
-engagement_end = 2500
-for period in ([lfptime[0], engagement_end], [engagement_end, 3600]):
-    lfp_period_start = np.where(lfptime<=period[0])[0][-1]
-    lfp_period_end = np.where(lfptime<=period[1])[0][-1]
-    period_spike_times = lfp_spike_times[(lfp_spike_times>preTime+lfp_period_start) & (lfp_spike_times<lfp_period_end-postTime)]
-    indexer = period_spike_times[:, None] + np.arange(-preTime, postTime)
-    stlfp = np.zeros(preTime+postTime)
-    [np.sum([stlfp, lfpsig[l, peakchan]], axis=0, out=stlfp) for l in indexer]
-    stlfp /= period_spike_times.size
-    ax.plot(stlfp)
-
-
-
-stlfp /= lfp_spike_times.size
-plt.figure()
-plt.plot(stlfp)
+ax.plot(f, np.mean(pratios,0),'k')
+ax.set_xlim([0,100])
 
 ####################################
 #### PCA (or some other technique) to understand response patterns
@@ -735,7 +867,7 @@ for pid in probes_to_run:
         region = units[pid][u]['ccfRegion']
         if region is not None and any([r in region for r in regionsToConsider]):
             spikes = units[pid][u]['times']
-            sdf = make_psth_all_flashes(spikes, frameTimes, core_data)
+            sdf, _ = make_psth_all_flashes(spikes, frameTimes, core_data)
             responseTensor.append(sdf)
             responseRegion.append(region)
             
@@ -754,9 +886,20 @@ plt.figure()
 plt.plot(np.dot(nbytrial_eVec, nbytrial_pca[1]))
 plt.plot(nbytrial[1])
 
+time = np.linspace(-0.1, 0.5, timeComponents.shape[1])
 fig, ax = plt.subplots(5, 1)
-for i, e in enumerate(timeComponents[:5]):
-    ax[i].plot(e)
+flip = [-1, 1, 1, 1, 1]
+for i, (e, f) in enumerate(zip(timeComponents[:5], flip)):
+    e *= f    
+    ax[i].plot(time, e, 'k')
+    ax[i].set_yticks([round(e.min(),2), round(e.max(), 2)])
+    if i >3:
+        formatFigure(fig, ax[i], xLabel='Time to flash (s)', yLabel='PC ' + str(i))
+    else:
+        formatFigure(fig, ax[i], yLabel='PC ' + str(i))
+        ax[i].xaxis.set_visible(False)
+        ax[i].spines['bottom'].set_visible(False)
+        
 
 
 ncattrial = np.reshape(responseTensor, [responseTensor.shape[0], -1])
@@ -783,3 +926,39 @@ nbytrial_pca = pca.fit_transform(ncattrial_standardized.T)
 fig, ax = plt.subplots(5, 1)
 for i, e in enumerate(nbytrial_pca.T):
     ax[i].plot(e)   
+    
+    
+    
+    
+    
+    
+early_late_ratios = []
+sustained = []
+latencies = []
+sdfs_all = []
+for pid in probes_to_run:
+    for u in probeSync.getOrderedUnits(units[pid]):
+        region = units[pid][u]['ccfRegion']
+        if region is not None and any([r in region for r in regionsToConsider]):
+            spikes = units[pid][u]['times']
+            sdfs, latency = make_psth_all_flashes(spikes, frameTimes, core_data)            
+            latencies.extend(latency)
+            
+            sdfs_all.extend(sdfs)
+        
+            for s in sdfs:
+                early_late_ratios.append(np.mean(s[150:250])/np.mean(s[275:375]))
+                sustained.append(np.mean(s[150:375])/np.max(s[150:375]))
+
+latencies = np.array(latencies) - 100
+sustained = np.array(sustained)
+sdfs_all = np.array(sdfs_all)
+
+good_resps = (~np.isnan(latencies) & (latencies<100))
+fig, ax = plt.subplots()
+ax.plot(latencies[good_resps], sustained[good_resps], 'ko')
+
+formatFigure(fig, ax, xLabel='Latency (ms)', yLabel='Sustained Index')
+            
+            
+            

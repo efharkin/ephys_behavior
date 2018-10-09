@@ -25,7 +25,11 @@ syncDataset = sync.Dataset(sync_file)
 
 
 # get probe data
+<<<<<<< HEAD
 probeIDs = ('A','B','C')
+=======
+probeIDs = ('A', 'B', 'C')
+>>>>>>> d978fa9243b10d43f2009cccd1580d8774e57558
 units = {str(pid): probeSync.getUnitData(dataDir,syncDataset, pid) for pid in probeIDs}
 
 
