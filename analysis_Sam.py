@@ -240,9 +240,9 @@ for pid in probesToAnalyze:
     peakResp.append(latency[-1].copy())    
     for i,u in enumerate(orderedUnits):
         spikes = units[pid][u]['times']
-        fig = plt.figure(facecolor='w')
-        ax = plt.subplot(1,1,1)
-        ax.plot([0,0],[0,1000],'k--')
+#        fig = plt.figure(facecolor='w')
+#        ax = plt.subplot(1,1,1)
+#        ax.plot([0,0],[0,1000],'k--')
         ymax = 0
         for j,(saccades,clr) in enumerate(zip((negSaccades,posSaccades),'rb')):
             saccadeTimes = eyeFrameTimes[saccades]
@@ -267,17 +267,17 @@ for pid in probesToAnalyze:
                 latency[-1][i,j] = t[latInd]-preTime
                 ax.plot(t[latInd]-preTime,sdf[latInd],'o',mfc=clr,mec=clr,ms=10)
             peakResp[-1][i,j] = z.max() if z.max()>-z.min() else z.min()
-        for side in ('right','top'):
-            ax.spines[side].set_visible(False)
-        ax.tick_params(direction='out',top=False,right=False,labelsize=10)
-        ax.set_xlim([-preTime,postTime])
-        ax.set_ylim([0,1.02*ymax])
-        ax.set_xlabel('Time relative to saccade (s)',fontsize=12)
-        ax.set_ylabel('Spike/s',fontsize=12)
-        ax.set_title('Probe '+pid+', Unit '+str(u),fontsize=12)
-        plt.tight_layout()
-    multipage(os.path.join(dataDir, 'saccadeSDFs_' + pid + '.pdf'))
-    plt.close('all')
+#        for side in ('right','top'):
+#            ax.spines[side].set_visible(False)
+#        ax.tick_params(direction='out',top=False,right=False,labelsize=10)
+#        ax.set_xlim([-preTime,postTime])
+#        ax.set_ylim([0,1.02*ymax])
+#        ax.set_xlabel('Time relative to saccade (s)',fontsize=12)
+#        ax.set_ylabel('Spike/s',fontsize=12)
+#        ax.set_title('Probe '+pid+', Unit '+str(u),fontsize=12)
+#        plt.tight_layout()
+#    multipage(os.path.join(dataDir, 'saccadeSDFs_' + pid + '.pdf'))
+#    plt.close('all')
     
 
 fig = plt.figure(facecolor='w')
@@ -311,8 +311,9 @@ for side in ('right','top'):
     ax.spines[side].set_visible(False)
 ax.set_xlim([-1,1])
 ax.tick_params(direction='out',top=False,right=False,labelsize=10)
-ax.set_xlabel('Saccade resp latency (s)',fontsize=12)
+ax.set_xlabel('Saccade response latency (s)',fontsize=12)
 ax.set_ylabel('Number of units',fontsize=12)
+ax.legend(('temporal','nasal'))
 plt.tight_layout()
 
 
@@ -365,7 +366,7 @@ frameRate = 60.0
 preTime = postTime = 10
 fig = plt.figure(facecolor='w')
 ax = plt.subplot(1,1,1)
-for resp,clr in zip((hit,miss,falseAlarm,correctReject),'krgb'):
+for resp,clr in zip((hit,miss,falseAlarm,correctReject),'bkrg'):
     changeTimes = frameTimes[np.array(trials['change_frame'][~ignore & resp]).astype(int)]
     alignedPupilArea = np.zeros((changeTimes.size,int(frameRate*(preTime+postTime))))
     for i,t in enumerate(changeTimes):
@@ -375,8 +376,9 @@ for resp,clr in zip((hit,miss,falseAlarm,correctReject),'krgb'):
 for side in ('right','top'):
     ax.spines[side].set_visible(False)
 ax.tick_params(direction='out',top=False,right=False,labelsize=10)
-ax.set_xlabel('Time relative to image change',fontsize=12)
-ax.set_ylabel('Pupil Area',fontsize=12)
+ax.set_xlabel('Time relative to image change (s)',fontsize=12)
+ax.set_ylabel('Pupil Area (pixels^2)',fontsize=12)
+ax.legend(('hit','miss','false alarm','correct reject'))
 plt.tight_layout()
 
 
