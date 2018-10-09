@@ -90,7 +90,7 @@ hitProb = np.full(dframes.size,np.nan)
 falseAlarmProb = np.full(dframes.size,np.nan)
 d = np.full(dframes.size,np.nan)
 for i,f in enumerate(dframes):
-    h,m,fa,cr = [np.sum((trials['change_frame'][r]>=f-window) & (trials['change_frame'][r]<f)) for r in (hit,miss,falseAlarm,correctReject)]
+    h,m,fa,cr = [np.sum((trials['change_frame'][r & (~ignore)]>=f-window) & (trials['change_frame'][r & (~ignore)]<f)) for r in (hit,miss,falseAlarm,correctReject)]
     hitProb[i] = h/(h+m)
     if hitProb[i]==1:
         hitProb[i] = 1-0.5/(h+m)
@@ -299,17 +299,7 @@ ax.set_ylim([-amax,amax])
 ax.set_aspect('equal')
 plt.tight_layout()
 
-fig = plt.figure(facecolor='w')
-ax = plt.subplot(1,1,1)
-for lat,peak in zip(latency,peakResp):
-    for j,clr in enumerate('rb'):
-        ax.plot(lat[:,j],peak[:,j],'o',mec=clr,mfc='none',ms=8,mew=2)
-for side in ('right','top'):
-    ax.spines[side].set_visible(False)
-ax.tick_params(direction='out',top=False,right=False,labelsize=10)
-ax.set_xlabel('Saccade resp latency (s)',fontsize=12)
-ax.set_ylabel('Max z score',fontsize=12)
-plt.tight_layout()
+
 
 fig = plt.figure(facecolor='w')
 ax = plt.subplot(1,1,1)
