@@ -643,6 +643,13 @@ formatFigure(fig, ax, xLabel='Time to change (s)', yLabel='Number of licks')
 ####### LFP STUFF
 def find_nearest_timepoint(time, timeseries):
     return np.where(timeseries<time)[0][-1]
+    
+def notch_filter(signal, notch_freq=60, sample_freq=2500, bandwidth=2):
+    nfb, nfa = scipy.signal.iirnotch(notch_freq/float(sample_freq/2), notch_freq/bandwidth)
+    signal_filt = scipy.signal.filtfilt(nfb, nfa, signal)
+    
+    return signal_filt
+    
 
 presTimes = frameTimes[np.array(core_data['visual_stimuli']['frame'])]   
 flash_lfp = []
@@ -654,7 +661,7 @@ flash_lfp = np.array(flash_lfp)
 plt.figure()
 plt.plot(np.mean(flash_lfp, 0))    
     
-pid = 'A'
+pid = 'B'
 lfpsig = lfp[pid][0]
 lfptime = lfp[pid][1]
 
@@ -822,7 +829,7 @@ engagement_end = 2500
 for u in probeSync.getOrderedUnits(units[pid]):
     print u
     spikes = units[pid][u]['times']
-    peakchan = units[pid][u]['peakChan']
+#    peakchan = units[pid][u]['peakChan']
     region = units[pid][u]['ccfRegion']
     if region is not None and any([r in region for r in regionsToConsider]):
         stlfp = get_spike_triggered_lfp(spikes[spikes<3600], peakchan, lfpsig, lfptime)
@@ -838,8 +845,8 @@ for u in probeSync.getOrderedUnits(units[pid]):
     region = units[pid][u]['ccfRegion']
     if region is not None and any([r in region for r in regionsToConsider]):    
         plt.figure(u)
-        plt.plot(units[pid][u]['engaged_spike_triggered_lfp'])
-        plt.plot(units[pid][u]['nonengaged_spike_triggered_lfp'])
+        plt.plot(units[pid][u]['engaged_spike_triggered_lfp'] - units[pid][u]['engaged_spike_triggered_lfp'].mean())
+        plt.plot(units[pid][u]['nonengaged_spike_triggered_lfp'] - units[pid][u]['nonengaged_spike_triggered_lfp'].mean())
 
 pratios = []
 e_stlfps = []
@@ -851,12 +858,15 @@ for u in probeSync.getOrderedUnits(units[pid]):
         fig.suptitle(str(u))
         estlfp = scipy.signal.medfilt(units[pid][u]['engaged_spike_triggered_lfp'], 11)
         nestlfp = scipy.signal.medfilt(units[pid][u]['nonengaged_spike_triggered_lfp'], 11)
-
-        e_stlfps.append(estlfp)
-        ne_stlfps.append(nestlfp)        
         
-        f, pxx_e = scipy.signal.welch(estlfp, fs = 2500, nperseg=1250)
-        f, pxx_ne = scipy.signal.welch(nestlfp, fs = 2500, nperseg=1250)
+        estlfp_filt = notch_filter(estlfp)
+        nestlfp_filt = notch_filter(nestlfp)
+
+        e_stlfps.append(estlfp_filt)
+        ne_stlfps.append(nestlfp_filt)        
+        
+        f, pxx_e = scipy.signal.welch(estlfp_filt, fs = 2500, nperseg=2500)
+        f, pxx_ne = scipy.signal.welch(nestlfp_filt, fs = 2500, nperseg=2500)
         
         pratios.append(np.log(pxx_e/pxx_ne))
         ax.plot(f, np.log(pxx_e/pxx_ne))
@@ -984,6 +994,7 @@ respLatency = 0.05
 epochs = (1000*np.array([[preTime + respLatency, preTime + respLatency + 0.1], [preTime + 0.2, preTime + 0.3], [preTime+0.45, preTime+0.65]])).astype(np.int)
 meanRates = []
 uid = []
+all_sdfs = []
 for pid in probes_to_run:
     for u in probeSync.getOrderedUnits(units[pid]):
         region = units[pid][u]['ccfRegion']
@@ -993,7 +1004,7 @@ for pid in probes_to_run:
                     
             sdfs, latency = make_psth_all_flashes(spikes, frameTimes, core_data, preTime=preTime, postTime = postTime)            
             baseline = np.mean(sdfs[:, 0:epochs[0][0]])
-            
+            all_sdfs.append(sdfs)
             for s in sdfs:
                 meanRate = []
                 for epoch in epochs:
@@ -1001,6 +1012,7 @@ for pid in probes_to_run:
                 meanRates.append(meanRate)
 
 meanRates = np.array(meanRates)
+all_sdfs = np.array(all_sdfs)
 
 meanRates_byCell = np.reshape(meanRates, (-1, 8, 3))
 rs = []
@@ -1014,13 +1026,44 @@ for r, label in zip(rs.T, labels):
     plt.hist(r)    
 
 
+#####################################
+###### classify image identity ######
+
+from sklearn.ensemble import RandomForestClassifier
+
+clf = RandomForestClassifier(1000, min_samples_split=5)
+
+selectedTrials = hit & (~ignore)
+changeTimes = frameTimes[np.array(trials['change_frame'][selectedTrials]).astype(int)]
+changeImages = np.array(trials['change_image_name'][selectedTrials])
+
+preTime = 1
+postTime = 1
+all_sdfs = []
+uid = []
+for pid in probes_to_run:
+    for u in probeSync.getOrderedUnits(units[pid]):
+        region = units[pid][u]['ccfRegion']
+        if region is not None and any([r in region for r in regionsToConsider]):
+            spikes = units[pid][u]['times']
+            uid.append(pid+str(u))
+            sdfs,t = getSDF(spikes,changeTimes-preTime,preTime+postTime,sigma=0.02,sampInt=0.001,avg=False)
+            if len(all_sdfs) == 0:
+                all_sdfs = np.copy(sdfs)
+                
+            else:
+                all_sdfs = np.hstack([all_sdfs, sdfs])
 
 
 
+clf.fit(all_sdfs, changeImages)
+f_importance_miss = clf.feature_importances_
 
+plt.figure()
+plt.plot(np.mean(np.reshape(f_importance_miss, [59, -1]), 0))
 
-
-
-
+for i, fi in enumerate(np.reshape(f_importance_miss, [59, -1])):
+    plt.figure(uid[i])
+    plt.plot(fi)
             
             
