@@ -403,3 +403,83 @@ rf = RandomForestRegressor(n_estimators=100)
 rf.fit(srmat,fr)
 
 
+# receptive fields
+def find_spikes_per_trial(spikes, trial_starts, trial_ends):
+    spike_counts = np.zeros(len(trial_starts))
+    for i, (ts, te) in enumerate(zip(trial_starts, trial_ends)):
+        spike_counts[i] = ((spikes>=ts) & (spikes<te)).sum()  
+    return spike_counts
+    
+# get rf mapping stim info
+rfstim_pickle_file = glob.glob(os.path.join(dataDir, '*brain_observatory_stimulus.pkl'))[0] 
+stim_dict = pd.read_pickle(rfstim_pickle_file)
+    
+pre_blank_frames = int(stim_dict['pre_blank_sec']*stim_dict['fps'])
+rfstim = stim_dict['stimuli'][0]
+
+# get image info\
+images = core_data['image_set']['images']
+imageNames = [i['image_name'] for i in core_data['image_set']['image_attributes']]
+imageCenterXY = [int(i/2) for i in images[0].shape[::-1]]
+
+monSizePix = stim_dict['monitor']['sizepix']
+monHeightCm = monSizePix[1]/monSizePix[0]*stim_dict['monitor']['widthcm']
+monDistCm = stim_dict['monitor']['distancecm']
+
+imagePixPerDeg = images[0].shape[0]/np.degrees(2*np.arctan(0.5*monHeightCm/monDistCm))
+
+#extract trial stim info (xpos, ypos, ori)
+sweep_table = np.array(rfstim['sweep_table'])   #table with rfstim parameters, indexed by sweep order to give stim for each trial
+sweep_order = np.array(rfstim['sweep_order'])   #index of stimuli for sweep_table for each trial
+sweep_frames = np.array(rfstim['sweep_frames']) #(start frame, end frame) for each trial
+
+trial_xpos = np.array([pos[0] for pos in sweep_table[sweep_order, 0]])
+trial_ypos = np.array([pos[1] for pos in sweep_table[sweep_order, 0]])
+trial_ori = sweep_table[sweep_order, 3]
+
+xpos = np.unique(trial_xpos)
+ypos = np.unique(trial_ypos)
+ori = np.unique(trial_ori)
+
+#get first frame for this stimulus (first frame after end of behavior session)
+first_rf_frame = trials['endframe'].values[-1] + pre_blank_frames + 1
+rf_frameTimes = frameTimes[first_rf_frame:]
+rf_trial_start_times = rf_frameTimes[np.array([f[0] for f in sweep_frames]).astype(np.int)]
+resp_latency = 0.05
+
+spikes = units['A'][1]['times']
+trial_spikes = find_spikes_per_trial(spikes, rf_trial_start_times+resp_latency, rf_trial_start_times+resp_latency+0.2)
+respMat = np.zeros([ypos.size, xpos.size, ori.size])
+for (y, x, o, tspikes) in zip(trial_xpos, trial_ypos, trial_ori, trial_spikes):
+    respInd = tuple([np.where(ypos==y)[0][0], np.where(xpos==x)[0][0], np.where(ori==o)[0][0]])
+    respMat[respInd] += tspikes
+bestOri = np.unravel_index(np.argmax(respMat), respMat.shape)[-1]  
+r = respMat[:,:,bestOri]
+
+gridSpacingDeg = xpos[1]-xpos[0]
+gridSpacingPix = int(round(imagePixPerDeg*gridSpacingDeg))
+a = r.copy()
+a -= a.min()
+a *= 255/a.max()
+a = np.repeat(np.repeat(a.astype(np.uint8),gridSpacingPix,axis=0),gridSpacingPix,axis=1)
+alpha = np.zeros_like(images[0])
+y0,x0 = (int(images[0].shape[i]/2-a.shape[i]/2) for i in (0,1))
+alpha[y0:y0+a.shape[0],x0:x0+a.shape[1]] = a
+
+img = images[0].copy()
+img[alpha==0] = 0
+a2 = alpha.copy()
+a2[a2==0] = 10
+img = np.stack((img,)*3+(a2,),axis=2)
+
+plt.imshow(img)
+
+
+im = axis.imshow(respMat[:, :, bestOri].T, interpolation='none', origin='lower')
+plt.colorbar(im)    
+tickLabels = [str(tick) for tick in np.unique(xpos)[::2]]
+axis.set_xticks(np.arange(0, len(np.unique(xpos)), 2))
+axis.set_yticks(np.arange(0, len(np.unique(xpos)), 2))
+axis.set_xticklabels(tickLabels)
+axis.set_yticklabels(tickLabels)
+
