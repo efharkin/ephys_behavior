@@ -6,7 +6,7 @@ Created on Thu Aug 23 11:29:39 2018
 """
 
 from __future__ import division
-import os
+import os, cv2
 import probeSync
 import numpy as np
 import scipy
@@ -420,7 +420,6 @@ rfstim = stim_dict['stimuli'][0]
 # get image info\
 images = core_data['image_set']['images']
 imageNames = [i['image_name'] for i in core_data['image_set']['image_attributes']]
-imageCenterXY = [int(i/2) for i in images[0].shape[::-1]]
 
 monSizePix = stim_dict['monitor']['sizepix']
 monHeightCm = monSizePix[1]/monSizePix[0]*stim_dict['monitor']['widthcm']
@@ -447,7 +446,7 @@ rf_frameTimes = frameTimes[first_rf_frame:]
 rf_trial_start_times = rf_frameTimes[np.array([f[0] for f in sweep_frames]).astype(np.int)]
 resp_latency = 0.05
 
-spikes = units['A'][1]['times']
+spikes = units['A'][221]['times']
 trial_spikes = find_spikes_per_trial(spikes, rf_trial_start_times+resp_latency, rf_trial_start_times+resp_latency+0.2)
 respMat = np.zeros([ypos.size, xpos.size, ori.size])
 for (y, x, o, tspikes) in zip(trial_xpos, trial_ypos, trial_ori, trial_spikes):
@@ -466,13 +465,12 @@ alpha = np.zeros_like(images[0])
 y0,x0 = (int(images[0].shape[i]/2-a.shape[i]/2) for i in (0,1))
 alpha[y0:y0+a.shape[0],x0:x0+a.shape[1]] = a
 
-img = images[0].copy()
-img[alpha==0] = 0
-a2 = alpha.copy()
-a2[a2==0] = 10
-img = np.stack((img,)*3+(a2,),axis=2)
 
-plt.imshow(img)
+img = np.stack((images[0],)*3+(alpha,),axis=2)
+
+ax = plt.subplot(1,1,1)
+ax.patch.set_alpha(0.0)
+ax.imshow(img)
 
 
 im = axis.imshow(respMat[:, :, bestOri].T, interpolation='none', origin='lower')
