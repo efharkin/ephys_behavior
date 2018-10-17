@@ -117,12 +117,18 @@ initialImage = np.array(trials['initial_image_name'])
 changeImage = np.array(trials['change_image_name'])
 
 
-# get rf mapping stim info
+ # get rf mapping stim info
+images = core_data['image_set']['images']
+imageNames = [i['image_name'] for i in core_data['image_set']['image_attributes']]
 rfstim_pickle_file = glob.glob(os.path.join(dataDir, '*brain_observatory_stimulus.pkl'))
 if len(rfstim_pickle_file)>0:
     rf_stim_dict = pd.read_pickle(rfstim_pickle_file[0])
     rf_pre_blank_frames = int(rf_stim_dict['pre_blank_sec']*rf_stim_dict['fps'])
     rfstim = rf_stim_dict['stimuli'][0]
+    monSizePix = rf_stim_dict['monitor']['sizepix']
+    monHeightCm = monSizePix[1]/monSizePix[0]*rf_stim_dict['monitor']['widthcm']
+    monDistCm = rf_stim_dict['monitor']['distancecm']
+    imagePixPerDeg = images[0].shape[0]/np.degrees(2*np.arctan(0.5*monHeightCm/monDistCm))
 
 
 

@@ -22,7 +22,7 @@ def all_unit_summary(probesToAnalyze, units, dataDir, runSpeed, runTime, name_ta
         multipageObj = PdfPages(os.path.join(dataDir, 'SummaryPlots_' + pid + name_tag + '.pdf'))
         orderedUnits = probeSync.getOrderedUnits(units[pid])
         for u in orderedUnits:
-            plot_unit_summary(pid, u, units, run_start_times, rfstim, pre_blank_frames, multipageObj)
+            plot_unit_summary(pid, u, units, multipageObj)
         
 #        multipage(os.path.join(dataDir, 'summaryPlots_' + pid + '.pdf'))
 #        plt.close('all')
@@ -41,14 +41,14 @@ def plot_unit_summary(pid, uid, units, multipageObj=None):
     gs = gridspec.GridSpec(8, 7)
     gs.update(top=0.95, bottom = 0.35, left=0.05, right=0.95, wspace=0.3)
     
-    rfaxes = [plt.subplot(gs[:,i]) for i in range(8)]
+    rfaxes = [plt.subplot(gs[i,1]) for i in range(8)]
     plot_rf(spikes, rfaxes, resp_latency=0.05)
     
-    allflashax = plt.subplot(gs[:, :7])
-    plot_psth_all_flashes(spikes, frameTimes, core_data, allflashax, preTime = 0.1, postTime = 0.75)
-    
-    allrespax = plt.subplot(gs[:, 8:14])
-    plot_psth_hits_vs_misses(spikes, frameTimes, trials, allrespax, preTime = 1.5, postTime = 3, average_across_images=False)
+#    allflashax = plt.subplot(gs[:, :7])
+#    plot_psth_all_flashes(spikes, frameTimes, core_data, allflashax, preTime = 0.1, postTime = 0.75)
+#    
+#    allrespax = plt.subplot(gs[:, 8:14])
+#    plot_psth_hits_vs_misses(spikes, frameTimes, trials, allrespax, preTime = 1.5, postTime = 3, average_across_images=False)
     
     plt.close(fig)
 
@@ -80,26 +80,10 @@ def find_spikes_per_trial(spikes, trial_starts, trial_ends):
         spike_counts[i] = ((spikes>=ts) & (spikes<te)).sum()  
     return spike_counts
 
-def multipage(filename, figs=None, dpi=200):
-    pp = PdfPages(filename)
-    if figs is None:
-        figs = [plt.figure(n) for n in plt.get_fignums()]
-    for fig in figs:
-        fig.savefig(pp, format='pdf')
-    pp.close()
+
 
 
 def plot_rf(spikes, axes, resp_latency=0.05):
-    # get image info
-    images = core_data['image_set']['images']
-    imageNames = [i['image_name'] for i in core_data['image_set']['image_attributes']]
-    
-    monSizePix = rf_stim_dict['monitor']['sizepix']
-    monHeightCm = monSizePix[1]/monSizePix[0]*rf_stim_dict['monitor']['widthcm']
-    monDistCm = rf_stim_dict['monitor']['distancecm']
-    
-    imagePixPerDeg = images[0].shape[0]/np.degrees(2*np.arctan(0.5*monHeightCm/monDistCm))
-    
     #extract trial stim info (xpos, ypos, ori)
     sweep_table = np.array(rfstim['sweep_table'])   #table with rfstim parameters, indexed by sweep order to give stim for each trial
     sweep_order = np.array(rfstim['sweep_order'])   #index of stimuli for sweep_table for each trial
@@ -136,7 +120,13 @@ def plot_rf(spikes, axes, resp_latency=0.05):
     y0,x0 = (int(images[0].shape[i]/2-a.shape[i]/2) for i in (0,1))
     alpha[y0:y0+a.shape[0],x0:x0+a.shape[1]] = a
     
-    for ax,img in zip(images,axes):
+    for ax,img,imname in zip(axes,images,imageNames):
         rgba = np.stack((img,)*3+(alpha,),axis=2)
         ax.patch.set_alpha(0.0)
-        ax.imshow(rgba,interpolation='none')
+        ax.imshow(rgba)
+        ax.set_axis_off()
+        ax.set_title(imname,fontsize=12)
+
+
+
+
