@@ -16,8 +16,9 @@ from visual_behavior.visualization.extended_trials.daily import make_daily_figur
 import pandas as pd
 import scipy
 import clust
+import matplotlib.gridspec as gridspec
 
-probes_to_run = ('A', 'B')
+probes_to_run = ('A', 'B', 'C')
 
 def getSDF(spikes,startTimes,windowDur,sigma=0.02,sampInt=0.001,avg=True):
         t = np.arange(0,windowDur+sampInt,sampInt)
@@ -207,49 +208,65 @@ def compute_lifetime_sparseness(spikes, frameTimes, core_data, preTime = 0.1, po
     
     return Sl
     
-sl = []
-regionsToConsider = ['VIS']
-for u in probeSync.getOrderedUnits(units[pid]):
-    spikes = units[pid][u]['times']
-    slu = compute_lifetime_sparseness(spikes, frameTimes, core_data)     
-    units[pid][u]['lifetime_sparseness'] = slu
+#sl = []
+#regionsToConsider = ['VIS']
+#for u in probeSync.getOrderedUnits(units[pid]):
+#    spikes = units[pid][u]['times']
+#    slu = compute_lifetime_sparseness(spikes, frameTimes, core_data)     
+#    units[pid][u]['lifetime_sparseness'] = slu
+#
+#    region = units[pid][u]['ccfRegion']    
+#    if region is not None and any([r in region for r in regionsToConsider]):
+#        sl.append(slu)
+#
+#plt.figure()
+#plt.hist(sl)
 
-    region = units[pid][u]['ccfRegion']    
-    if region is not None and any([r in region for r in regionsToConsider]):
-        sl.append(slu)
+def plot_spike_amplitudes(units, pid, uid, axis):
+    
+    spikes = units[pid][uid]['times']
+    amplitudes = units[pid][uid]['amplitudes']    
+    
+    num_spikes_to_plot = 1000.
+    num_spikes_to_skip = int(spikes.size/num_spikes_to_plot)
+    axis.plot(spikes[::num_spikes_to_skip], amplitudes[::num_spikes_to_skip], 'ko', alpha=0.2)
+    
+    last_behavior_time = frameTimes[trials['endframe'].values[-1]]    
+    
+    axis.set_xlim([0, frameTimes[-1]])
+    ax.plot([last_behavior_time, last_behavior_time], [axis.get_ylim()[0], axis.get_ylim()[1]], 'k--')
+    formatFigure(fig, axis, 'Spike Template Amplitudes for ' + pid + str(uid), xLabel='Sample #', yLabel='Template Scale Factor')
 
-plt.figure()
-plt.hist(sl)
+def plot_spike_template(units, pid, uid, gs=None):
+    if gs is None:
+        gs = gridspec.GridSpec(2,2)
+    template = units[pid][uid]['template']
+    tempax = plt.subplot(gs[:, 0])    
+    tempax.imshow(template.T, cmap='gray', origin='lower')
+    tempax.set_xlim([0, 80])
+    tempax.set_xticks([0, 80])
+    tempax.set_xticklabels([0, 2.67]) 
     
+    temp_channels = np.where(template>0)
+    first_chan = temp_channels[1].min()
+    last_chan = temp_channels[1].max()
+    temp_inset = template[:, first_chan:last_chan]
+    insetax = plt.subplot(gs[0, 1])
+    insetax.patch.set_alpha(0.0)
+    insetax.imshow(temp_inset.T, cmap='gray', origin='lower')    
+    insetax.set_yticks([0, temp_inset.shape[1]])
+    insetax.set_yticklabels([first_chan, last_chan])
+    insetax.set_xlim([0, 80])
+    insetax.set_xticks([0, 80])
+    insetax.set_xticklabels([0, 2.67])    
     
-# sdf for all hit and miss trials    
-#preTime = 1.5
-#postTime = 1.5
-#sdfSigma = 0.02
-#for pid in probes_to_run:
-#    plt.close('all')
-#    orderedUnits = probeSync.getOrderedUnits(units[pid])
-#    for u in orderedUnits:
-#        spikes = units[pid][u]['times']
-#        fig = plt.figure(facecolor='w')
-#        ax = plt.subplot(1,1,1)
-#        ymax = 0
-#        for resp,clr in zip((hit,miss),'rb'):
-#            selectedTrials = resp & (~ignore)
-#            changeTimes = frameTimes[np.array(trials['change_frame'][selectedTrials]).astype(int)]
-#            sdf,t = getSDF(spikes,changeTimes-preTime,preTime+postTime,sigma=sdfSigma)
-#            ax.plot(t-preTime,sdf,clr)
-#            ymax = max(ymax,sdf.max())
-#        for side in ('right','top'):
-#            ax.spines[side].set_visible(False)
-#        ax.tick_params(direction='out',top=False,right=False,labelsize=10)
-#        ax.set_xlim([-preTime,postTime])
-#        ax.set_ylim([0,1.02*ymax])
-#        ax.set_xlabel('Time relative to image change (s)',fontsize=12)
-#        ax.set_ylabel('Spike/s',fontsize=12)
-#        ax.set_title('Probe '+pid+', Unit '+str(u),fontsize=12)
-#        plt.tight_layout()
-#    multipage(os.path.join(dataDir, 'behaviorPSTHs_combined_hits_misses_' + pid + '.pdf'))
+    peak_channel_waveform = template[:, units[pid][uid]['peakChan']]
+    peakchanax = plt.subplot(gs[1,1])
+    peakchanax.plot(peak_channel_waveform, 'k')
+    peakchanax.set_xlim([0, 80])
+    peakchanax.set_xticks([0, 80])
+    peakchanax.set_xticklabels([0, 2.67])      
+    
 
 def plot_psth_hits_vs_misses(spikes, frameTimes, trials, axis, preTime = 1.5, postTime = 1.5, sdfSigma=0.02, average_across_images=True):
     autoRewarded = np.array(trials['auto_rewarded']).astype(bool)
@@ -401,35 +418,6 @@ def plot_rf(spikes, frameTimes, trials, dataDir, axis, rfstim, pre_blank_frames,
     axis.set_xticklabels(tickLabels)
     axis.set_yticklabels(tickLabels)
         
-
-        
-
-
-
-#respMats = []
-#for u in probeSync.getOrderedUnits(units[pid]):
-#    spikes = units[pid][u]['times']
-#    respMat = np.zeros([psthSize, xpos.size, ypos.size, ori.size])
-#    for trialType in np.unique(sweep_order):
-#        this_trial_starts = rf_trial_start_times[sweep_order==trialType]
-#        this_trial_psth = makePSTH(spikes, this_trial_starts-preTime, preTime+postTime, binSize)
-#        this_trial_params = sweep_table[trialType]
-#
-#        xInd = np.where(xpos==this_trial_params[0][0])
-#        yInd = np.where(ypos==this_trial_params[0][1])
-#        oriInd = np.where(ori==this_trial_params[3])
-#        
-#        respMat[:, xInd, yInd, oriInd] = this_trial_psth[:, None, None]     
-#        
-#        
-#    bestOri = np.unravel_index(np.argmax(respMat), respMat.shape)[-1]
-#    fig, ax = plt.subplots(ypos.size, xpos.size)
-#    fig.suptitle(u)
-#    for x in np.arange(xpos.size):
-#        for y in np.arange(ypos.size):
-#            ax[y,x].plot(respMat[:, x, y, bestOri], 'k')
-#            ax[y,x].set_ylim([0, respMat.max()])
-#            ax[y,x].axis('off')
             
 
 #################################################
@@ -558,8 +546,6 @@ def plot_saccade_triggered_fr(spikes, eyeData, eyeFrameTimes, axis, preTime=2, p
 ##########################
 #### MAKE SUMMARY PLOT####
         
-import matplotlib.gridspec as gridspec
-
 def all_unit_summary(probesToAnalyze, units, dataDir, runSpeed, runTime, name_tag = ''):
     plt.close('all')
     run_start_times = find_run_transitions(runSpeed, runTime)
