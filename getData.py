@@ -6,7 +6,7 @@ Created on Thu Aug 23 11:29:39 2018
 """
 
 from __future__ import division
-import os, glob, h5py, nrrd
+import os, glob, h5py, nrrd, cv2
 from xml.dom import minidom
 import numpy as np
 import pandas as pd
@@ -119,6 +119,8 @@ changeImage = np.array(trials['change_image_name'])
 
  # get rf mapping stim info
 images = core_data['image_set']['images']
+newSize = tuple(int(s/10) for s in images[0].shape[::-1])
+imagesDownsampled = [cv2.resize(img,newSize,interpolation=cv2.INTER_AREA) for img in images]
 imageNames = [i['image_name'] for i in core_data['image_set']['image_attributes']]
 rfstim_pickle_file = glob.glob(os.path.join(dataDir, '*brain_observatory_stimulus.pkl'))
 if len(rfstim_pickle_file)>0:
@@ -128,7 +130,9 @@ if len(rfstim_pickle_file)>0:
     monSizePix = rf_stim_dict['monitor']['sizepix']
     monHeightCm = monSizePix[1]/monSizePix[0]*rf_stim_dict['monitor']['widthcm']
     monDistCm = rf_stim_dict['monitor']['distancecm']
-    imagePixPerDeg = images[0].shape[0]/np.degrees(2*np.arctan(0.5*monHeightCm/monDistCm))
+    monHeightDeg = np.degrees(2*np.arctan(0.5*monHeightCm/monDistCm))
+    imagePixPerDeg = images[0].shape[0]/monHeightDeg 
+    imageDownsamplePixPerDeg = imagesDownsampled[0].shape[0]/monHeightDeg
 
 
 

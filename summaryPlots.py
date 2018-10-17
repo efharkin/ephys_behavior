@@ -21,7 +21,7 @@ def all_unit_summary(probesToAnalyze, units, dataDir, runSpeed, runTime, name_ta
     for pid in probesToAnalyze:
         multipageObj = PdfPages(os.path.join(dataDir, 'SummaryPlots_' + pid + name_tag + '.pdf'))
         orderedUnits = probeSync.getOrderedUnits(units[pid])
-        for u in orderedUnits:
+        for u in (221,):#orderedUnits[:3]:
             plot_unit_summary(pid, u, units, multipageObj)
         
 #        multipage(os.path.join(dataDir, 'summaryPlots_' + pid + '.pdf'))
@@ -30,7 +30,7 @@ def all_unit_summary(probesToAnalyze, units, dataDir, runSpeed, runTime, name_ta
         
 def plot_unit_summary(pid, uid, units, multipageObj=None):
     spikes = units[pid][uid]['times']
-    fig = plt.figure(facecolor='w', figsize=(16,12))
+    fig = plt.figure(facecolor='w', figsize=(16,10))
     if 'ccfRegion' in units[pid][uid] and units[pid][uid]['ccfRegion'] is not None:
         figtitle = 'Probe: ' + str(pid) + ', unit: ' + str(uid) + ' ' + units[pid][uid]['ccfRegion']
     else:
@@ -38,17 +38,23 @@ def plot_unit_summary(pid, uid, units, multipageObj=None):
         
     fig.suptitle(figtitle)
     
-    gs = gridspec.GridSpec(8, 7)
+    gs = gridspec.GridSpec(8, 8)
     gs.update(top=0.95, bottom = 0.35, left=0.05, right=0.95, wspace=0.3)
     
-    rfaxes = [plt.subplot(gs[i,1]) for i in range(8)]
-    plot_rf(spikes, rfaxes, resp_latency=0.05)
+    imgAxes = [plt.subplot(gs[i,0]) for i in range(8)]
+    plot_images(imgAxes)
+    
+    rfAxes = [plt.subplot(gs[i,1]) for i in range(8)]
+    plot_rf(spikes, rfAxes, resp_latency=0.05)
     
 #    allflashax = plt.subplot(gs[:, :7])
 #    plot_psth_all_flashes(spikes, frameTimes, core_data, allflashax, preTime = 0.1, postTime = 0.75)
 #    
 #    allrespax = plt.subplot(gs[:, 8:14])
 #    plot_psth_hits_vs_misses(spikes, frameTimes, trials, allrespax, preTime = 1.5, postTime = 3, average_across_images=False)
+    
+    if multipageObj is not None:
+        fig.savefig(multipageObj, format='pdf')   
     
     plt.close(fig)
 
@@ -81,7 +87,13 @@ def find_spikes_per_trial(spikes, trial_starts, trial_ends):
     return spike_counts
 
 
-
+def plot_images(axes):
+    for ax,img,imname in zip(axes,imagesDownsampled,imageNames):
+        ax.imshow(img,cmap='gray')
+        ax.set_xticks([])
+        ax.set_yticks([])
+        ax.set_ylabel(imname,fontsize=10)
+    
 
 def plot_rf(spikes, axes, resp_latency=0.05):
     #extract trial stim info (xpos, ypos, ori)
@@ -111,21 +123,20 @@ def plot_rf(spikes, axes, resp_latency=0.05):
     r = respMat[:,:,bestOri]
     
     gridSpacingDeg = xpos[1]-xpos[0]
-    gridSpacingPix = int(round(imagePixPerDeg*gridSpacingDeg))
+    gridSpacingPix = int(round(imageDownsamplePixPerDeg*gridSpacingDeg))
     a = r.copy()
     a -= a.min()
     a *= 255/a.max()
     a = np.repeat(np.repeat(a.astype(np.uint8),gridSpacingPix,axis=0),gridSpacingPix,axis=1)
-    alpha = np.zeros_like(images[0])
-    y0,x0 = (int(images[0].shape[i]/2-a.shape[i]/2) for i in (0,1))
+    alpha = np.zeros_like(imagesDownsampled[0])
+    y0,x0 = (int(imagesDownsampled[0].shape[i]/2-a.shape[i]/2) for i in (0,1))
     alpha[y0:y0+a.shape[0],x0:x0+a.shape[1]] = a
     
-    for ax,img,imname in zip(axes,images,imageNames):
+    for ax,img,imname in zip(axes,imagesDownsampled,imageNames):
         rgba = np.stack((img,)*3+(alpha,),axis=2)
-        ax.patch.set_alpha(0.0)
         ax.imshow(rgba)
-        ax.set_axis_off()
-        ax.set_title(imname,fontsize=12)
+        ax.set_xticks([])
+        ax.set_yticks([])
 
 
 
