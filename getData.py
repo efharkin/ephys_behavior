@@ -18,6 +18,7 @@ from visual_behavior.translator.core import create_extended_dataframe
 from visual_behavior.translator.foraging2 import data_to_change_detection_core
 from visual_behavior.visualization.extended_trials.daily import make_daily_figure
 import scipy
+from analysis_utils import find_run_transitions
 
 
 dataDir = "\\\\allen\\programs\\braintv\\workgroups\\nc-ophys\\corbettb\\Behavior\\09202018_390339"
@@ -117,7 +118,7 @@ initialImage = np.array(trials['initial_image_name'])
 changeImage = np.array(trials['change_image_name'])
 
 
- # get rf mapping stim info
+# get rf mapping stim info
 images = core_data['image_set']['images']
 newSize = tuple(int(s/10) for s in images[0].shape[::-1])
 imagesDownsampled = [cv2.resize(img,newSize,interpolation=cv2.INTER_AREA) for img in images]
@@ -135,7 +136,10 @@ if len(rfstim_pickle_file)>0:
     imageDownsamplePixPerDeg = imagesDownsampled[0].shape[0]/monHeightDeg
 
 
+# get run start times
+run_start_times = find_run_transitions(runSpeed, runTime)
 
+# get lfp data
 lfp = {str(pid): probeSync.getLFPdata(dataDir, pid, syncDataset) for pid in probeIDs}
 
 #for pid in probeIDs:
