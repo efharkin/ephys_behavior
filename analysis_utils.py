@@ -5,6 +5,7 @@ Created on Wed Oct 17 13:40:38 2018
 @author: svc_ccg
 """
 
+from __future__ import division
 import numpy as np
 import matplotlib.pyplot as plt
 import scipy

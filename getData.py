@@ -117,6 +117,9 @@ correctReject = np.array(trials['response_type']=='CR')
 initialImage = np.array(trials['initial_image_name'])
 changeImage = np.array(trials['change_image_name'])
 
+stimDur = np.array(core_data['visual_stimuli']['duration'])
+grayDur = np.stack(trials['blank_duration_range']) # where is actual gray dur
+
 
 # get rf mapping stim info
 images = core_data['image_set']['images']
