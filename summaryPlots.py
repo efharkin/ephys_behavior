@@ -17,32 +17,29 @@ from matplotlib.backends.backend_pdf import PdfPages
 
 def all_unit_summary(probesToAnalyze, units, dataDir, runSpeed, runTime, name_tag = ''):
     plt.close('all')
-    
     for pid in probesToAnalyze:
         multipageObj = PdfPages(os.path.join(dataDir, 'SummaryPlots_' + pid + name_tag + '.pdf'))
         orderedUnits = probeSync.getOrderedUnits(units[pid])
         for u in orderedUnits:
             plot_unit_summary(pid, u, units, multipageObj)
-        
-#        multipage(os.path.join(dataDir, 'summaryPlots_' + pid + '.pdf'))
-#        plt.close('all')
         multipageObj.close()
-        
+
+       
 def plot_unit_summary(pid, uid, units, multipageObj=None):
     spikes = units[pid][uid]['times']
     fig = plt.figure(facecolor='w', figsize=(16,10))
     figtitle = 'Probe ' + str(pid) + ', unit ' + str(uid)
     if 'ccfRegion' in units[pid][uid] and units[pid][uid]['ccfRegion'] is not None:
         figtitle += ' , ' + units[pid][uid]['ccfRegion']
-    fig.suptitle(figtitle)
+    fig.suptitle(figtitle,fontsize=14)
     
-    gs = gridspec.GridSpec(8, 8)
-    gs.update(top=0.95, bottom = 0.35, left=0.05, right=0.95, wspace=0.3)
+    gs = gridspec.GridSpec(9, 8)
+    gs.update(top=0.95, bottom = 0.05, left=0.05, right=0.95, wspace=0.3)
     
     imgAxes = [plt.subplot(gs[i,0]) for i in range(8)]
     plot_images(imgAxes)
     
-    rfAxes = [plt.subplot(gs[i,1]) for i in range(8)]
+    rfAxes = [plt.subplot(gs[i,1]) for i in range(9)]
     plot_rf(spikes, rfAxes, resp_latency=0.05)
     
     allflashax = [plt.subplot(gs[i,2:4]) for i in range(8)]
@@ -53,16 +50,15 @@ def plot_unit_summary(pid, uid, units, multipageObj=None):
     
     if multipageObj is not None:
         fig.savefig(multipageObj, format='pdf')
-    
     plt.close(fig)
 
 
 def plot_images(axes):
     for ax,img,imname in zip(axes,imagesDownsampled,imageNames):
-        ax.imshow(img,cmap='gray')
+        ax.imshow(img,cmap='gray',clim=[0,255])
         ax.set_xticks([])
         ax.set_yticks([])
-        ax.set_ylabel(imname,fontsize=10)
+        ax.set_ylabel(imname,fontsize=12)
 
 
 def plot_rf(spikes, axes=None, resp_latency=0.05):
@@ -89,20 +85,31 @@ def plot_rf(spikes, axes=None, resp_latency=0.05):
     for (y, x, o, tspikes) in zip(trial_ypos, trial_xpos, trial_ori, trial_spikes):
         respInd = tuple([np.where(ypos==y)[0][0], np.where(xpos==x)[0][0], np.where(ori==o)[0][0]])
         respMat[respInd] += tspikes
-    bestOri = np.unravel_index(np.argmax(respMat), respMat.shape)[-1]  
+    bestOri = np.unravel_index(np.argmax(respMat), respMat.shape)[-1]
     
     gridSpacingDeg = xpos[1]-xpos[0]
     gridSpacingPix = int(round(imageDownsamplePixPerDeg*gridSpacingDeg))
-    r = np.repeat(np.repeat(respMat[:,:,bestOri],gridSpacingPix,axis=0),gridSpacingPix,axis=1)
+    r = respMat[:,:,bestOri].copy()
+    r -= r.min()
+    r /= r.max()
+    r = np.repeat(np.repeat(r,gridSpacingPix,axis=0),gridSpacingPix,axis=1)
     rmap = np.zeros(imagesDownsampled[0].shape)
-    y0,x0 = (int(rmap.shape[i]/2-r.shape[i]/2) for i in (0,1))
-    rmap[y0:y0+r.shape[0],x0:x0+r.shape[1]] = r
+    i,j = (int(rmap.shape[s]/2-r.shape[s]/2) for s in (0,1))
+    rmap[i:i+r.shape[0],j:j+r.shape[1]] = r[::-1]
+    rmapColor = plt.cm.magma(rmap)[:,:,:3]
+    rmapColor *= rmap[:,:,None]
     
-    for ax,img,imname in zip(axes,imagesDownsampled,imageNames):
-        ax.imshow(rmap,cmap='hot')
-#        ax.imshow(img,cmap='gray',alpha=0.9)
+    for ax,img in zip(axes[:-1],imagesDownsampled):
+        img = img.astype(float)
+        img /= 255
+        img *= 1-rmap
+        ax.imshow(rmapColor+img[:,:,None])
         ax.set_xticks([])
         ax.set_yticks([])
+        
+    axes[-1].imshow(rmap,cmap='magma')
+    axes[-1].set_xticks([])
+    axes[-1].set_yticks([])
 
 
 def plot_psth_all_flashes(spikes, axes=None, preTime = 0.05, postTime = 0.55, sdfSigma=0.005):
@@ -144,7 +151,7 @@ def plot_psth_hits_vs_misses(spikes, axes=None, preTime=1.55, postTime=4.5, sdfS
         for img in imageNames:
             selectedTrials = resp & (changeImage==img) & (~ignore)
             changeTimes = frameTimes[np.array(trials['change_frame'][selectedTrials]).astype(int)]
-            sdf,t = getSDF(spikes,changeTimes-preTime,preTime+postTime,sigma=sdfSigma)
+            sdf,t = analysis_utils.getSDF(spikes,changeTimes-preTime,preTime+postTime,sigma=sdfSigma)
             s.append(sdf)
     
     ymax = round(max([max(h.max(),m.max()) for h,m in zip(hitSDFs,missSDFs)])+0.5)
