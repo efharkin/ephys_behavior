@@ -458,8 +458,9 @@ def plot_unit_summary(pid, uid, units, run_start_times, rfstim, pre_blank_frames
     plt.close(fig)
     
 
-def plot_unit_behavior_summary(pid, uid, run_start_times, multipageObj=None):
-
+def plot_unit_behavior_summary(pid, uid, multipageObj=None):
+    spikes = units[pid][uid]['times']    
+    
     fig = plt.figure(facecolor='w', figsize=(16,12))
     if 'ccfRegion' in units[pid][uid] and units[pid][uid]['ccfRegion'] is not None:
         figtitle = 'Probe: ' + str(pid) + ', unit: ' + str(uid) + ' ' + units[pid][uid]['ccfRegion']
