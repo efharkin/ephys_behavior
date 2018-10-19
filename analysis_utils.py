@@ -21,7 +21,8 @@ def getSDF(spikes,startTimes,windowDur,sigma=0.02,sampInt=0.001,avg=True):
             sdf = sdf.mean(axis=0)
         sdf /= sampInt
         return sdf,t[:-1]
-        
+
+       
 def makePSTH(spikes,startTimes,windowDur,binSize=0.1, avg=True):
     bins = np.arange(0,windowDur+binSize,binSize)
     counts = np.zeros((len(startTimes),bins.size-1))    
@@ -32,6 +33,7 @@ def makePSTH(spikes,startTimes,windowDur,binSize=0.1, avg=True):
         return counts.mean(axis=0)/binSize
     else:
         return np.array(counts)/binSize
+
 
 def get_ccg(spikes1, spikes2, auto=False, width=0.1, bin_width=0.0005, plot=False):
 
@@ -73,6 +75,7 @@ def get_ccg(spikes1, spikes2, auto=False, width=0.1, bin_width=0.0005, plot=Fals
         ax.tick_params(direction='out',top=False,right=False,labelsize='xx-small')
         
     return hh, hb
+
 
 def find_spikes_per_trial(spikes, trial_starts, trial_ends):
     spike_counts = np.zeros(len(trial_starts))
@@ -121,4 +124,16 @@ def find_latency(signal, baseline_end = 100, stdev_thresh = 3, min_points_above_
             return np.nan
     
     return cand
+    
+    
+def get_trial_by_time(times, trial_start_times, trial_end_times):
+    trials = []
+    for time in times:
+        if trial_start_times[0]<=time<trial_end_times[-1]:
+            trial = np.where((trial_start_times<=time)&(trial_end_times>time))[0][0]
+        else:
+            trial = -1
+        trials.append(trial)
+    
+    return np.array(trials)
     

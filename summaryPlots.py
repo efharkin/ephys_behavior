@@ -13,19 +13,21 @@ import matplotlib.pyplot as plt
 from matplotlib import patches
 import matplotlib.gridspec as gridspec
 from matplotlib.backends.backend_pdf import PdfPages
+from probeData import formatFigure
 
 
-def all_unit_summary(probesToAnalyze, units, dataDir, runSpeed, runTime, name_tag = ''):
+def all_unit_summary(probesToAnalyze, name_tag = ''):
     plt.close('all')
     for pid in probesToAnalyze:
         multipageObj = PdfPages(os.path.join(dataDir, 'SummaryPlots_' + pid + name_tag + '.pdf'))
         orderedUnits = probeSync.getOrderedUnits(units[pid])
         for u in orderedUnits:
             plot_unit_summary(pid, u, units, multipageObj)
+            plot_unit_behavior_summary(pid, u, units, multipageObj)
         multipageObj.close()
 
        
-def plot_unit_summary(pid, uid, units, multipageObj=None):
+def plot_unit_summary(pid, uid, multipageObj=None):
     spikes = units[pid][uid]['times']
     fig = plt.figure(facecolor='w', figsize=(16,10))
     figtitle = 'Probe ' + str(pid) + ', unit ' + str(uid)
@@ -48,6 +50,38 @@ def plot_unit_summary(pid, uid, units, multipageObj=None):
     hitmissax = [plt.subplot(gs[i,4:]) for i in range(8)]
     plot_psth_hits_vs_misses(spikes, hitmissax)
     
+    if multipageObj is not None:
+        fig.savefig(multipageObj, format='pdf')
+    plt.close(fig)
+    
+    
+def plot_unit_behavior_summary(pid, uid, multipageObj=None):
+    spikes = units[pid][uid]['times'] 
+    fig = plt.figure(facecolor='w', figsize=(16,12))
+    figtitle = 'Probe ' + str(pid) + ', unit ' + str(uid)
+    if 'ccfRegion' in units[pid][uid] and units[pid][uid]['ccfRegion'] is not None:
+        figtitle += ' , ' + units[pid][uid]['ccfRegion']   
+    fig.suptitle(figtitle)    
+    
+    gs_waveform = gridspec.GridSpec(3, 3)
+    gs_waveform.update(top=0.95, bottom = 0.35, left=0.05, right=0.95, wspace=0.3)
+
+    plot_spike_template(pid, uid, gs=gs_waveform)
+    
+    amp_ax = plt.subplot(gs_waveform[:, 2])
+    plot_spike_amplitudes(pid, uid, amp_ax)
+    
+    gs_behavior = gridspec.GridSpec(1, 3)
+    gs_behavior.update(top=0.25, bottom = 0.05, left=0.05, right=0.95, wspace=0.3)
+    
+    lickax = plt.subplot(gs_behavior[0, 0])
+    plot_lick_triggered_fr(spikes, lickax)
+    
+    runax = plt.subplot(gs_behavior[0, 1])
+    plot_run_triggered_fr(spikes, runax)
+    
+    saccadeax = plt.subplot(gs_behavior[0,2])
+    plot_saccade_triggered_fr(spikes, saccadeax)
     if multipageObj is not None:
         fig.savefig(multipageObj, format='pdf')
     plt.close(fig)
@@ -173,5 +207,171 @@ def plot_psth_hits_vs_misses(spikes, axes=None, preTime=1.55, postTime=4.5, sdfS
             ax.set_yticklabels([])
         if ax is not axes[-1]:
             ax.set_xticklabels([])
-    axes[-1].set_xlabel('Time to change (s)',fontsize=12) 
+    axes[-1].set_xlabel('Time to change (s)',fontsize=12)
+    
+
+def plot_spike_amplitudes(pid, uid, axis):
+    spikes = units[pid][uid]['times']
+    amplitudes = units[pid][uid]['amplitudes']    
+    
+    num_spikes_to_plot = 1000.
+    if spikes.size>num_spikes_to_plot:
+        num_spikes_to_skip = int(spikes.size/num_spikes_to_plot)
+    else:
+        num_spikes_to_skip = 1
+        
+    axis.plot(amplitudes[::num_spikes_to_skip], frameTimes[-1] - spikes[::num_spikes_to_skip], 'ko', alpha=0.2)
+    
+    last_behavior_time = frameTimes[trials['endframe'].values[-1]]    
+    
+    axis.set_ylim([0, int(frameTimes[-1])])
+    axis.set_yticks([0, int(frameTimes[-1])])
+    axis.set_yticklabels([int(frameTimes[-1]), 0])
+    axis.plot([axis.get_xlim()[0], axis.get_xlim()[1]], [frameTimes[-1]-last_behavior_time, frameTimes[-1]-last_behavior_time], 'k--')
+    formatFigure(plt.gcf(), axis, xLabel='Template Scale Factor', yLabel='Time (s)')
+    axis.yaxis.labelpad = -20
+    
+
+def plot_spike_template(pid, uid, gs=None):
+    if gs is None:
+        gs = gridspec.GridSpec(3,3)
+    template = units[pid][uid]['template']
+    tempax = plt.subplot(gs[:, 0])    
+    tempax.imshow(template.T, cmap='gray', origin='lower')
+    tempax.set_xlim([0, 80])
+    tempax.set_xticks([0, 80])
+    tempax.set_xticklabels([0, 2.67]) 
+    tempax.set_xlabel('Time (ms)')
+    tempax.set_ylabel('Channel')
+    
+    temp_channels = np.where(template>0)
+    first_chan = temp_channels[1].min()
+    last_chan = temp_channels[1].max()
+    temp_inset = template[:, first_chan:last_chan]
+    insetax = plt.subplot(gs[0, 1])
+    insetax.patch.set_alpha(0.0)
+    insetax.imshow(temp_inset.T, cmap='gray', origin='lower')    
+    insetax.set_yticks([0, temp_inset.shape[1]])
+    insetax.set_yticklabels([first_chan, last_chan])
+    insetax.set_xlim([0, 80])
+    insetax.set_xticks([0, 80])
+    insetax.set_xticklabels([0, 2.67])    
+    
+    peak_channel_waveform = template[:, units[pid][uid]['peakChan']]
+    peakchanax = plt.subplot(gs[1,1])
+    peakchanax.plot(peak_channel_waveform, 'k')
+    peakchanax.set_xlim([0, 80])
+    peakchanax.set_xticks([0, 80])
+    peakchanax.set_xticklabels([0, 2.67])     
+    
+    spike_times = units[pid][uid]['times']
+    d = []                   # Distance between any two spike times
+    n_sp = len(spike_times)  # Number of spikes in the input spike train
+    
+    bin_width=0.0005
+    width=0.1
+    i, j = 0, 0
+    for t in spike_times:
+        # For each spike we only consider those spikes times that are at most
+        # at a 'width' time lag. This requires finding the indices
+        # associated with the limiting spikes.
+        while i < n_sp and spike_times[i] < t - width:
+            i += 1
+        while j < n_sp and spike_times[j] < t + width:
+            j += 1
+        # Once the relevant spikes are found, add the time differences
+        # to the list
+        d.extend(spike_times[i:j] - t)
+        
+    n_b = int( np.ceil(width / bin_width) )  # Num. edges per side
+    # Define the edges of the bins (including rightmost bin)
+    b = np.linspace(-width, width, 2 * n_b, endpoint=True)
+    [h, hb] = np.histogram(d, bins=b)
+    h[np.ceil(len(h)/2).astype(int) - 1] = 0
+                    
+    acgax = plt.subplot(gs[2,1])
+    acgax.bar(hb[:-1], h, bin_width)
+    acgax.set_xlim([-width,width])
+    acgax.spines['right'].set_visible(False)
+    acgax.spines['top'].set_visible(False)
+    acgax.tick_params(direction='out',top=False,right=False)
+    acgax.set_yticks([0, h.max()])
+    acgax.set_xlabel('Time (s)')
+    acgax.set_ylabel('Spike count')
+
+
+def plot_lick_triggered_fr(spikes, axis, min_inter_lick_time = 0.5, preTime=1, postTime=2):
+    trial_start_frames = np.array(trials['startframe'])
+    trial_end_frames = np.array(trials['endframe'])
+    trial_start_times = frameTimes[trial_start_frames]
+    trial_end_times = frameTimes[trial_end_frames]
+    
+    lick_times = probeSync.get_sync_line_data(syncDataset, 'lick_sensor')[0]
+    first_lick_times = lick_times[np.insert(np.diff(lick_times)>=min_inter_lick_time, 0, True)]
+    first_lick_trials = analysis_utils.get_trial_by_time(first_lick_times, trial_start_times, trial_end_times)
+    
+    hit = np.array(trials['response_type']=='HIT')
+    earlyResponse = np.array(trials['response_type']=='EARLY_RESPONSE')
+    falseAlarm = np.array(trials['response_type']=='FA')
+    hit_lick_times = first_lick_times[np.where(hit[first_lick_trials])[0]]
+    bad_lick_times = first_lick_times[np.where(falseAlarm[first_lick_trials] | earlyResponse[first_lick_trials])[0]]
+   
+    hit_psth, t = analysis_utils.getSDF(spikes,hit_lick_times-preTime,preTime+postTime)
+    bad_psth, t  = analysis_utils.getSDF(spikes,bad_lick_times-preTime,preTime+postTime)
+    
+    hit, = axis.plot(t-1,hit_psth, 'k')
+    bad, = axis.plot(t-1, bad_psth, 'r')
+    axis.legend((hit, bad), ('hit', 'aborted/FA'), loc='best', prop={'size':8})
+    formatFigure(plt.gcf(), axis, xLabel='Time to lick (s)',  yLabel='Lick-Trig. FR (Hz)')
+    axis.plot([0,0], axis.get_ylim(), 'k--')
+    
+    
+def plot_run_triggered_fr(spikes, axis, preTime=1, postTime=2):      
+    run_psth, t = analysis_utils.getSDF(spikes,run_start_times-preTime,preTime+postTime)
+    axis.plot(t-1,run_psth, 'k')
+    axis.plot([0,0], axis.get_ylim(), 'k--')
+    formatFigure(plt.gcf(), axis, xLabel='Time to run (s)', yLabel='Run-Trig. FR (Hz)')
+    
+
+def plot_saccade_triggered_fr(spikes, axis, preTime=2, postTime=2, sdfSigma=0.02, latThresh=5, minPtsAboveThresh=50):
+    if eyeData is None:
+        print('No eye data')
+        return    
+    
+    latFilt = np.ones(minPtsAboveThresh)
+
+    axis.plot([0,0],[0,1000],'k--')
+    ymax = 0
+    plotlines = []
+    for j,(saccades,clr) in enumerate(zip((negSaccades,posSaccades),'rb')):
+        saccadeTimes = eyeFrameTimes[saccades]
+        sdf,t = analysis_utils.getSDF(spikes,saccadeTimes-preTime,preTime+postTime,sigma=sdfSigma)
+        plotline, = axis.plot(t-preTime,sdf,clr)
+        plotlines.append(plotline)
+        ymax = max(ymax,sdf.max())
+        z = sdf-sdf[t<1].mean()
+        z /= sdf[t<1].std()
+        posLat = np.where(np.correlate(z>latThresh,latFilt,mode='valid')==minPtsAboveThresh)[0]
+        posLat = posLat[0] if posLat.size>0 else None
+        negLat = np.where(np.correlate(z<-latThresh,latFilt,mode='valid')==minPtsAboveThresh)[0]
+        negLat = negLat[0] if negLat.size>0 else None
+#            posLat = np.where(z[:np.argmax(z)]<latencyThresh)[0][-1]+1 if z.max()>latencyThresh else None
+#            negLat = np.where(z[:np.argmin(z)]>-latencyThresh)[0][-1]+1 if z.min()<-latencyThresh else None
+        if posLat is not None or negLat is not None:
+            if posLat is None:
+                latInd = negLat
+            elif negLat is None:
+                latInd = posLat
+            else:
+                latInd = min(posLat,negLat)
+            axis.plot(t[latInd]-preTime,sdf[latInd],'o',mfc=clr,mec=clr,ms=10)
+
+    for side in ('right','top'):
+        axis.spines[side].set_visible(False)
+    axis.tick_params(direction='out',top=False,right=False,labelsize=10)
+    axis.set_xlim([-preTime,postTime])
+    axis.set_ylim([0,1.02*ymax])
+    axis.set_xlabel('Time relative to saccade (s)',fontsize=12)
+    axis.set_ylabel('Spike/s',fontsize=12)
+    axis.legend((plotlines[0], plotlines[1]), ('temporal', 'nasal'), loc='best', prop={'size':8})
 
