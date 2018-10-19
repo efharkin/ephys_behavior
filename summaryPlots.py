@@ -20,11 +20,13 @@ def all_unit_summary(probesToAnalyze, name_tag = ''):
     plt.close('all')
     for pid in probesToAnalyze:
         multipageObj = PdfPages(os.path.join(dataDir, 'SummaryPlots_' + pid + name_tag + '.pdf'))
-        orderedUnits = probeSync.getOrderedUnits(units[pid])
-        for u in orderedUnits:
-            plot_unit_summary(pid, u, multipageObj)
-            plot_unit_behavior_summary(pid, u, multipageObj)
-        multipageObj.close()
+        try:
+            orderedUnits = probeSync.getOrderedUnits(units[pid])
+            for u in orderedUnits:
+                plot_unit_summary(pid, u, multipageObj)
+                plot_unit_behavior_summary(pid, u, multipageObj)
+        finally:
+            multipageObj.close()
 
        
 def plot_unit_summary(pid, uid, multipageObj=None):
