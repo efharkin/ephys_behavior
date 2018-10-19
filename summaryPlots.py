@@ -22,8 +22,8 @@ def all_unit_summary(probesToAnalyze, name_tag = ''):
         multipageObj = PdfPages(os.path.join(dataDir, 'SummaryPlots_' + pid + name_tag + '.pdf'))
         orderedUnits = probeSync.getOrderedUnits(units[pid])
         for u in orderedUnits:
-            plot_unit_summary(pid, u, units, multipageObj)
-            plot_unit_behavior_summary(pid, u, units, multipageObj)
+            plot_unit_summary(pid, u, multipageObj)
+            plot_unit_behavior_summary(pid, u, multipageObj)
         multipageObj.close()
 
        
@@ -335,7 +335,6 @@ def plot_run_triggered_fr(spikes, axis, preTime=1, postTime=2):
 
 def plot_saccade_triggered_fr(spikes, axis, preTime=2, postTime=2, sdfSigma=0.02, latThresh=5, minPtsAboveThresh=50):
     if eyeData is None:
-        print('No eye data')
         return    
     
     latFilt = np.ones(minPtsAboveThresh)
