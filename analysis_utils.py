@@ -109,21 +109,24 @@ def find_run_transitions(run_signal, run_time, thresh = [1,5], smooth_kernel = 0
     
     
 def find_latency(signal, baseline_end = 100, stdev_thresh = 3, min_points_above_thresh=30):
-    thresh = stdev_thresh*np.std(signal[:baseline_end]) + np.mean(signal[:baseline_end])   
-    over_std = np.where(signal>thresh)[0]
-
-    if len(over_std)==0:
-        return np.nan
+    try:
+        thresh = stdev_thresh*np.std(signal[:baseline_end]) + np.mean(signal[:baseline_end])   
+        over_std = np.where(signal>thresh)[0]
     
-    counter = 1
-    cand = over_std[0]
-    while any(signal[cand:cand+min_points_above_thresh]<thresh):
-        cand = over_std[counter]
-        counter += 1
-        if counter==len(over_std):
+        if len(over_std)==0:
             return np.nan
-    
-    return cand
+        
+        counter = 1
+        cand = over_std[0]
+        while any(signal[cand:cand+min_points_above_thresh]<thresh):
+            cand = over_std[counter]
+            counter += 1
+            if counter==len(over_std):
+                return np.nan
+        
+        return cand
+    except:
+        return np.nan
     
     
 def get_trial_by_time(times, trial_start_times, trial_end_times):
