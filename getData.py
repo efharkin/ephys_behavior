@@ -21,8 +21,8 @@ import scipy
 from analysis_utils import find_run_transitions
 
 
-#dataDir = "\\\\allen\\programs\\braintv\\workgroups\\nc-ophys\\corbettb\\Behavior\\09202018_390339"
-dataDir = "Z:\10042018_394873"
+dataDir = "\\\\allen\\programs\\braintv\\workgroups\\nc-ophys\\corbettb\\Behavior\\09202018_390339"
+#dataDir = "Z:\\10042018_394873"
 sync_file = glob.glob(os.path.join(dataDir, '*.h5'))[0]
 syncDataset = sync.Dataset(sync_file)
 
@@ -76,8 +76,9 @@ trials = create_extended_dataframe(
 
 # Get frame times from sync file
 frameRising, frameFalling = probeSync.get_sync_line_data(syncDataset, 'stim_vsync')
-#monitorLags = frameFalling[60::120][:100] - diode[0][4:4+frameFalling[60::120].size][:100]
-monitorLag = 0.0359
+diode = probeSync.get_sync_line_data(syncDataset, 'photodiode')
+#monitorLags = diode[0][4:4+frameFalling[60::120].size][:100] - frameFalling[60::120][:100]
+monitorLag = 0.036
 frameTimes = frameFalling + monitorLag
 
 # get running data
