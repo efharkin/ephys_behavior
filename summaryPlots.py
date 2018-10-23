@@ -54,7 +54,7 @@ def plot_unit_summary(pid, uid, multipageObj=None):
     
     if multipageObj is not None:
         fig.savefig(multipageObj, format='pdf')
-    plt.close(fig)
+        plt.close(fig)
     
     
 def plot_unit_behavior_summary(pid, uid, multipageObj=None):
