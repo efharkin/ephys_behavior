@@ -21,8 +21,9 @@ import scipy
 from analysis_utils import find_run_transitions
 
 
-dataDir = "\\\\allen\\programs\\braintv\\workgroups\\nc-ophys\\corbettb\\Behavior\\09202018_390339"
-#dataDir = "Z:\\10042018_394873"
+#dataDir = '\\\\allen\\programs\\braintv\\workgroups\\nc-ophys\\corbettb\\Behavior\\09202018_390339'
+dataDir = 'Z:\\10042018_394873'
+
 sync_file = glob.glob(os.path.join(dataDir, '*.h5'))[0]
 syncDataset = sync.Dataset(sync_file)
 

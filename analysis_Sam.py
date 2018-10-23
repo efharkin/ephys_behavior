@@ -54,7 +54,7 @@ endFrame = int(trials['endframe'][hit.size-1])
 endTime = frameTimes[endFrame]   
 
 fig = plt.figure(facecolor='w',figsize=(18,10))
-ax = plt.subplot(3,1,1)
+ax = plt.subplot(4,1,1)
 selectedTrials = ~earlyResponse
 changeTimes = frameTimes[np.array(trials['change_frame'][selectedTrials]).astype(int)]
 for trialIndex,t in zip(np.where(selectedTrials)[0],changeTimes):
@@ -70,9 +70,17 @@ for side in ('right','top'):
 ax.tick_params(direction='out',top=False,right=False,labelsize=10)
 ax.set_xlim([0,endTime-startTime])
 ax.set_ylim([-0.25,postTime])
-ax.set_ylabel('Time relative to image change (s)',fontsize=12)
+ax.set_ylabel('Time to image change (s)',fontsize=12)
 
-ax = plt.subplot(3,1,2)
+ax = plt.subplot(4,1,2)
+ax.plot(runTime,runSpeed,'k')
+for side in ('right','top'):
+    ax.spines[side].set_visible(False)
+ax.tick_params(direction='out',top=False,right=False,labelsize=10)
+ax.set_xlim([0,endTime-startTime])
+ax.set_ylabel('Speed',fontsize=12)
+
+ax = plt.subplot(4,1,3)
 for resp,clr,lbl in zip((hit,miss,falseAlarm,correctReject),'bkrg',('hit','miss','false alarm','correct reject')):
     ax.plot(changeTimes-startTime,np.cumsum(resp[selectedTrials]),clr,label=lbl)
 for side in ('right','top'):
@@ -82,7 +90,7 @@ ax.set_xlim([0,endTime-startTime])
 ax.set_ylabel('Count',fontsize=12)
 ax.legend()
 
-ax = plt.subplot(3,1,3)
+ax = plt.subplot(4,1,4)
 window = 300*60
 interval = 60*60
 dframes = np.arange(int(startFrame+window),int(endFrame),int(interval))
@@ -110,7 +118,7 @@ ax.tick_params(direction='out',top=False,right=False,labelsize=10)
 ax.set_xlim([0,endTime-startTime])
 ax.set_ylim([0,1])
 ax.set_ylabel('Probability',fontsize=12)
-ax.set_xlabel('Time of image change (s)',fontsize=12)
+ax.set_xlabel('Time (s)',fontsize=12)
 ax.legend()
 
 plt.tight_layout()

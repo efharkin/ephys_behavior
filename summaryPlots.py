@@ -16,6 +16,92 @@ from matplotlib.backends.backend_pdf import PdfPages
 from probeData import formatFigure
 
 
+def behavior_summary(tag=''):
+    preTime = 0.25
+    postTime = 1.5
+    
+    startFrame = int(trials['startframe'][0])
+    startTime = frameTimes[startFrame]
+    endFrame = int(trials['endframe'][hit.size-1])
+    endTime = frameTimes[endFrame]   
+    
+    fig = plt.figure(facecolor='w',figsize=(18,10))
+    ax = plt.subplot(4,1,1)
+    selectedTrials = ~earlyResponse
+    changeTimes = frameTimes[np.array(trials['change_frame'][selectedTrials]).astype(int)]
+    for trialIndex,t in zip(np.where(selectedTrials)[0],changeTimes):
+        licks = frameTimes[np.array(trials['lick_frames'][trialIndex]).astype(int)]-t
+        ax.plot(t-startTime+np.zeros(licks.size),licks,'o',mec='0.5',mfc='none',ms=3)
+        reward = frameTimes[np.array(trials['reward_frames'][trialIndex]).astype(int)]-t
+        m = 's' if autoRewarded[trialIndex] else 'o'
+        ax.plot(t-startTime+np.zeros(reward.size),reward,m,mec='0.5',mfc='0.5',ms=3)
+    for resp,clr in zip((hit,miss,falseAlarm,correctReject),'bkrg'):
+        ax.plot(changeTimes[resp[selectedTrials]],-preTime/2+np.zeros(resp.sum()),'s',mec=clr,mfc='none',ms=3)
+    for side in ('right','top'):
+        ax.spines[side].set_visible(False)
+    ax.tick_params(direction='out',top=False,right=False,labelsize=10)
+    ax.set_xlim([0,endTime-startTime])
+    ax.set_ylim([-preTime,postTime])
+    ax.set_ylabel('Time to image change (s)',fontsize=12)
+    
+    ax = plt.subplot(4,1,2)
+    ax.plot(runTime,runSpeed,'k')
+    for side in ('right','top'):
+        ax.spines[side].set_visible(False)
+    ax.tick_params(direction='out',top=False,right=False,labelsize=10)
+    ax.set_xlim([0,endTime-startTime])
+    ax.set_ylabel('Speed',fontsize=12)
+    
+    ax = plt.subplot(4,1,3)
+    for resp,clr,lbl in zip((hit,miss,falseAlarm,correctReject),'bkrg',('hit','miss','false alarm','correct reject')):
+        ax.plot(changeTimes-startTime,np.cumsum(resp[selectedTrials]),clr,label=lbl)
+    for side in ('right','top'):
+        ax.spines[side].set_visible(False)
+    ax.tick_params(direction='out',top=False,right=False,labelsize=10)
+    ax.set_xlim([0,endTime-startTime])
+    ax.set_ylabel('Count',fontsize=12)
+    ax.legend()
+    
+    ax = plt.subplot(4,1,4)
+    window = 300*60
+    interval = 60*60
+    dframes = np.arange(int(startFrame+window),int(endFrame),int(interval))
+    hitProb = np.full(dframes.size,np.nan)
+    falseAlarmProb = np.full(dframes.size,np.nan)
+    d = np.full(dframes.size,np.nan)
+    for i,f in enumerate(dframes):
+        h,m,fa,cr = [np.sum((trials['change_frame'][r & (~ignore)]>=f-window) & (trials['change_frame'][r & (~ignore)]<f)) for r in (hit,miss,falseAlarm,correctReject)]
+        hitProb[i] = h/(h+m)
+        if hitProb[i]==1:
+            hitProb[i] = 1-0.5/(h+m)
+        elif hitProb[i]==0:
+            hitProb[i] = 0.5/(h+m)
+        falseAlarmProb[i] = fa/(fa+cr)
+        if falseAlarmProb[i]==1:
+            falseAlarmProb[i] = 1-0.5/(fa+cr)
+        elif falseAlarmProb[i]==0:
+            falseAlarmProb[i] = 0.5/(fa+cr)
+        d[i] = scipy.stats.norm.ppf(hitProb[i])-scipy.stats.norm.ppf(falseAlarmProb[i])
+    ax.plot(frameTimes[dframes]-startTime,hitProb,'b',label='hit')
+    ax.plot(frameTimes[dframes]-startTime,falseAlarmProb,'r',label='false alarm')
+    for side in ('right','top'):
+        ax.spines[side].set_visible(False)
+    ax.tick_params(direction='out',top=False,right=False,labelsize=10)
+    ax.set_xlim([0,endTime-startTime])
+    ax.set_ylim([0,1])
+    ax.set_ylabel('Probability',fontsize=12)
+    ax.set_xlabel('Time (s)',fontsize=12)
+    ax.legend()
+    
+    plt.tight_layout()
+    multipageObj = PdfPages(os.path.join(dataDir, 'BehaviorSummary' + tag + '.pdf'))
+    try:
+        fig.savefig(multipageObj, format='pdf')
+        plt.close(fig)
+    finally:
+        multipageObj.close()
+
+
 def all_unit_summary(probesToAnalyze, name_tag = ''):
     plt.close('all')
     for pid in probesToAnalyze:
