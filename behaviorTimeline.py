@@ -16,7 +16,7 @@ from visual_behavior.translator.foraging2 import data_to_change_detection_core
 from visual_behavior.translator.core import create_extended_dataframe
 
 
-pickleDir = r'\\allen\programs\braintv\workgroups\nc-ophys\corbettb\Behavior\behavior pickle files'
+pickleDir = r'\\EphysRoom342\Data\behavior pickle files'
 
 mouseID = '385533'
 ephysDates = ('09072018','09102018','09112018','09172018')
@@ -27,11 +27,11 @@ ephysDates = ('09192018','09202018','09212018')
 mouseID = '394873'
 ephysDates = ('10042018','10052018')
 
-mouseID = '404788'
-ephysDates = None
-
 mouseID = '403472'
-ephysDates = None
+ephysDates = ('10312018','11012018')
+
+mouseID = '403468'
+ephysDates = ('11142018','11152018')
 
 
 ephysDates = [datetime.datetime.strptime(d,'%m%d%Y') for d in ephysDates] if ephysDates is not None else (None,)
@@ -44,6 +44,7 @@ lastEngaged = []
 probEngaged = []
 trainingDate = []
 trainingStage = []
+rigID = []
 for pklFile in  glob.glob(os.path.join(pickleDir,mouseID,'*.pkl')):
     try:
         core_data = data_to_change_detection_core(pd.read_pickle(pklFile))
@@ -85,28 +86,33 @@ for pklFile in  glob.glob(os.path.join(pickleDir,mouseID,'*.pkl')):
         probEngaged.append(0)
         
     trainingDate.append(datetime.datetime.strptime(os.path.basename(pklFile)[:6],'%y%m%d'))
-    trainingStage.append(trials['stage'])
+    trainingStage.append(core_data['metadata']['stage'])
+    rigID.append(core_data['metadata']['rig_id'])
     
-t = np.array([(d-min(trainingDate)).days+1 for d in trainingDate])
-isImages = np.array(['images' in s[0] for s in trainingStage])
+day = np.array([(d-min(trainingDate)).days+1 for d in trainingDate])
+isImages = np.array(['images' in s for s in trainingStage])
+isRig = np.array(['NP' in r for r in rigID])
 isEphys = np.array([d in ephysDates for d in trainingDate])
 
 fig = plt.figure(facecolor='w',figsize=(8,10))
 for i,(prm,ymax,lbl) in enumerate(zip((rewardsEarned,lastEngaged,probEngaged),(None,3660,1),('Rewards Earned','Last Engaged (s)','Probability Engaged'))):
     ax = plt.subplot(3,1,i+1)
-    for ind,clr,mrk in zip(((~isImages) & (~isEphys),(~isImages & isEphys),(isImages & (~isEphys)),(isImages & isEphys)),'krkr','ssoo'):
-        ax.plot(t[ind],np.array(prm)[ind],mrk,mec=clr,mfc=clr,ms=8)
+    for j,(d,p) in enumerate(zip(day,prm)):
+        mec = 'r' if isEphys[j] else 'k'
+        mfc = mec if isRig[j] else 'none'
+        mrk = 'o' if isImages[j] else 's'
+        ax.plot(d,p,mrk,mec=mec,mfc=mfc,ms=8)
     for side in ('right','top'):
         ax.spines[side].set_visible(False)
     ax.tick_params(direction='out',top=False,right=False,labelsize=12)
-    ax.set_xlim([0,max(t)+1])
+    ax.set_xlim([0,max(day)+1])
     ylimMax = max(prm) if ymax is None else ymax
     ax.set_ylim([0,1.05*ylimMax])
     ax.set_ylabel(lbl,fontsize=14)
     if i==0:
         ax.set_title(mouseID,fontsize=14)
     if i==2:
-        ax.set_xlabel('Training Day',fontsize=14)
+        ax.set_xlabel('Day',fontsize=14)
 plt.tight_layout()
     
     
