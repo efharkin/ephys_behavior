@@ -15,7 +15,6 @@ import matplotlib.pyplot as plt
 from visual_behavior.translator.foraging2 import data_to_change_detection_core
 from visual_behavior.translator.core import create_extended_dataframe
 
-
 pickleDir = r'\\EphysRoom342\Data\behavior pickle files'
 
 mouseID = '385533'
@@ -32,6 +31,9 @@ ephysDates = ('10312018','11012018')
 
 mouseID = '403468'
 ephysDates = ('11142018','11152018')
+
+mouseID = '412624'
+ephysDates = ('11292018','11302018')
 
 
 ephysDates = [datetime.datetime.strptime(d,'%m%d%Y') for d in ephysDates] if ephysDates is not None else (None,)

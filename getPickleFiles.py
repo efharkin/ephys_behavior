@@ -1,8 +1,11 @@
 # -*- coding: utf-8 -*-
+
 """
-mouseID = '403468'
-limsDir = r'\\allen\programs\braintv\production\visualbehavior\prod0\specimen_738786518'
-getPickelFiles(mouseID,limsDir)
+
+import getPickleFiles
+mouseID = '412624'
+limsDir = r'\\allen\programs\braintv\production\neuralcoding\prod0\specimen_756576263'
+getPickleFiles.getPickleFiles(mouseID,limsDir)
 
 """
 
