@@ -11,7 +11,9 @@ import fileIO
 from sync import sync
 import probeSync
 import numpy as np
+import pandas as pd
 import matplotlib.pyplot as plt
+from simlib import discretizer, tektronics, nidaq
 
 
 def addDetectedLicksToAnnotationFile(lickDataFile,detectedLickFrames):
@@ -29,10 +31,81 @@ def addDetectedLicksToAnnotationFile(lickDataFile,detectedLickFrames):
 def getFirstLicks(lickTimes,minBoutInterval=0.5):
     lickIntervals = np.diff(lickTimes)
     return lickTimes[np.concatenate(([0],np.where(lickIntervals>minBoutInterval)[0]+1))]
+    
 
 
-syncFile = fileIO.getFile('choose sync file')
-defaultDir = os.path.dirname(syncFile)
+# process analog signal
+analogDataFile = fileIO.getFile() 
+defaultDir = os.path.dirname(analogDataFile)
+
+h = 0.000264 # arduino time step
+
+analogData = pd.read_csv(analogDataFile,skiprows=2)
+sampRate = 1000
+data = np.array(analogData['Dev2/ai0'])
+t = np.arange(0,data.size/sampRate,1/sampRate)
+
+time,uo = discretizer.interpolate_data_to_timestep(t,data,h)
+pointsToAnalyze = slice(0,time.size)
+time = time[pointsToAnalyze]
+uo = uo[pointsToAnalyze]
+filtered = []
+
+# Band-Pass Butterworth Filter (2nd order) - Transfer Function
+wo = 150.0 * (2 * np.pi)     # Filter Center Frequency (rad/s)
+Q = 5                      # Band-Pass Quality Scalar
+Ho = 2.0                   # Filter Gain Scalar
+num = np.array([Ho*(wo/Q), 0])
+den = np.array([1, wo/Q, wo*wo])
+filtered.append(discretizer.apply_discrete_filter(num, den, h, uo))
+
+# Rectify Signal
+filtered.append(discretizer.apply_rectifier(filtered[-1]))
+
+# 2nd Order Tracking
+K = 675
+wn = 60 * (2 * np.pi)
+lamda = 3
+num = [K*wn]
+den = [1, 2*lamda*wn, wn*wn]
+filtered.append(discretizer.apply_discrete_filter(num, den, h, filtered[-1]))
+
+# derivative
+numPointsToBaseline = 100
+numPointsToAverage = 10
+d = np.array(filtered[-1])
+dprime = d.copy()
+dprime[:numPointsToBaseline] = 0
+for i in range(numPointsToBaseline,d.size):
+    baseline = d[i-numPointsToBaseline:i-numPointsToBaseline+numPointsToAverage].mean()
+    dprime[i] = d[i-numPointsToAverage+1:i+1].mean()-baseline
+filtered.append(dprime)
+
+# Logic Gate
+K = 1
+hi_trigger = 0.03
+lo_trigger = 0.0
+filtered.append(discretizer.apply_schmidt_trigger(K, hi_trigger, lo_trigger, filtered[-1]))
+
+# plot
+n = 10000
+plt.figure()
+plt.plot(time[:n], uo[:n])
+for f in filtered:
+    plt.plot(time[:n], f[:n])
+plt.ylabel('Signal')
+plt.xlabel('Time (s)')
+#plt.legend(['Analog Data','Bandpass','Rectify','Track','Deriv','Schmidt'])
+
+# resample tracking and deriv to frames
+camExp = np.array(analogData[' Dev2/ai1'])
+camFrames = np.where((camExp[1:]>2.5) & (camExp[:-1]<2.5))[0]+1
+tracking,deriv,detected = (discretizer.interpolate_data_to_timestep(time,filtered[i],1/sampRate)[1][camFrames] for i in (-3,-2,-1))
+
+
+
+#
+syncFile = fileIO.getFile('choose sync file',defaultDir)
 syncDataset = sync.Dataset(syncFile)
 
 camFrameTimes = probeSync.get_sync_line_data(syncDataset,'cam1_exposure')[0]
