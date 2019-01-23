@@ -52,7 +52,7 @@ uo = uo[pointsToAnalyze]
 filtered = []
 
 # Band-Pass Butterworth Filter (2nd order) - Transfer Function
-wo = 150.0 * (2 * np.pi)     # Filter Center Frequency (rad/s)
+wo = 130.0 * (2 * np.pi)     # Filter Center Frequency (rad/s)
 Q = 5                      # Band-Pass Quality Scalar
 Ho = 2.0                   # Filter Gain Scalar
 num = np.array([Ho*(wo/Q), 0])
@@ -60,7 +60,7 @@ den = np.array([1, wo/Q, wo*wo])
 filtered.append(discretizer.apply_discrete_filter(num, den, h, uo))
 
 # Rectify Signal
-filtered.append(discretizer.apply_rectifier(filtered[-1]))
+filtered.append(discretizer.apply_rectifier(filtered[0]))
 
 # 2nd Order Tracking
 K = 675
@@ -68,12 +68,12 @@ wn = 60 * (2 * np.pi)
 lamda = 3
 num = [K*wn]
 den = [1, 2*lamda*wn, wn*wn]
-filtered.append(discretizer.apply_discrete_filter(num, den, h, filtered[-1]))
+filtered.append(discretizer.apply_discrete_filter(num, den, h, filtered[1]))
 
 # derivative
 numPointsToBaseline = 189
 numPointsToAverage = 10
-d = np.array(filtered[-1])
+d = np.array(filtered[2])
 dprime = d.copy()
 dprime[:numPointsToBaseline] = 0
 for i in range(numPointsToBaseline,d.size):
@@ -83,18 +83,18 @@ filtered.append(dprime)
 
 # Logic Gate
 K = 1
-hi_trigger = 0.03
-lo_trigger = 0.0
-filtered.append(discretizer.apply_schmidt_trigger(K, hi_trigger, lo_trigger, filtered[-1]))
+hi_trigger = 0.04
+lo_trigger = -0.01
+filtered.append(discretizer.apply_schmidt_trigger(K, hi_trigger, lo_trigger, filtered[3]))
 
 # plot
-n = 10000
-plt.figure()
-plt.plot(time[:n], uo[:n])
-for f in filtered:
-    plt.plot(time[:n], f[:n])
-plt.ylabel('Signal')
-plt.xlabel('Time (s)')
+#n = 10000
+#plt.figure()
+#plt.plot(time[:n], uo[:n])
+#for f in filtered:
+#    plt.plot(time[:n], f[:n])
+#plt.ylabel('Signal')
+#plt.xlabel('Time (s)')
 #plt.legend(['Analog Data','Bandpass','Rectify','Track','Deriv','Schmidt'])
 
 
@@ -114,18 +114,19 @@ detectedLickFrames = np.searchsorted(camFrameTimes,detectedLickTimes)
 #camData.close()
 
 
-# resample tracking and deriv to frames
+# resample analog signals to frames
 camExp = np.array(analogData[' Dev2/ai1'])
 firstAnalogFrame = np.where(camExp[1:]>2.5)[0][0]
 camFrameSamples = firstAnalogFrame+np.concatenate(([0],np.round(np.cumsum(np.diff(camFrameTimes))*sampRate).astype(int)))
 tracking,deriv,detected = (discretizer.interpolate_data_to_timestep(time,filtered[i],1/sampRate)[1][camFrameSamples] for i in (-3,-2,-1))
+detected = np.clip(detected,0.001,None,detected)
 
 
 # make lick data file
 lickDataFile = h5py.File(os.path.join(defaultDir,'lickData.hdf5'),'w',libver='latest')
-paramData = (('frameTimes',np.full(camFrames.size,np.nan)),
-             ('reflectCenter',np.full((camFrames.size,2),np.nan)),
-             ('pupilCenter',np.full((camFrames.size,2),np.nan)),
+paramData = (('frameTimes',np.full(camFrameTimes.size,np.nan)),
+             ('reflectCenter',np.full((camFrameTimes.size,2),np.nan)),
+             ('pupilCenter',np.full((camFrameTimes.size,2),np.nan)),
              ('pupilArea',tracking),
              ('pupilX',deriv),
              ('pupilY',detected),
