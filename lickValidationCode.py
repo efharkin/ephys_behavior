@@ -71,7 +71,7 @@ den = [1, 2*lamda*wn, wn*wn]
 filtered.append(discretizer.apply_discrete_filter(num, den, h, filtered[-1]))
 
 # derivative
-numPointsToBaseline = 100
+numPointsToBaseline = 189
 numPointsToAverage = 10
 d = np.array(filtered[-1])
 dprime = d.copy()
@@ -97,14 +97,8 @@ plt.ylabel('Signal')
 plt.xlabel('Time (s)')
 #plt.legend(['Analog Data','Bandpass','Rectify','Track','Deriv','Schmidt'])
 
-# resample tracking and deriv to frames
-camExp = np.array(analogData[' Dev2/ai1'])
-camFrames = np.where((camExp[1:]>2.5) & (camExp[:-1]<2.5))[0]+1
-tracking,deriv,detected = (discretizer.interpolate_data_to_timestep(time,filtered[i],1/sampRate)[1][camFrames] for i in (-3,-2,-1))
 
-
-
-#
+# get frame times and detected licks from sync file
 syncFile = fileIO.getFile('choose sync file',defaultDir)
 syncDataset = sync.Dataset(syncFile)
 
@@ -119,9 +113,33 @@ detectedLickFrames = np.searchsorted(camFrameTimes,detectedLickTimes)
 #frameIntervals = camData['frame_intervals'][:]
 #camData.close()
 
+
+# resample tracking and deriv to frames
+camExp = np.array(analogData[' Dev2/ai1'])
+firstAnalogFrame = np.where(camExp[1:]>2.5)[0][0]
+camFrameSamples = firstAnalogFrame+np.concatenate(([0],np.round(np.cumsum(np.diff(camFrameTimes))*sampRate).astype(int)))
+tracking,deriv,detected = (discretizer.interpolate_data_to_timestep(time,filtered[i],1/sampRate)[1][camFrameSamples] for i in (-3,-2,-1))
+
+
+# make lick data file
+lickDataFile = h5py.File(os.path.join(defaultDir,'lickData.hdf5'),'w',libver='latest')
+paramData = (('frameTimes',np.full(camFrames.size,np.nan)),
+             ('reflectCenter',np.full((camFrames.size,2),np.nan)),
+             ('pupilCenter',np.full((camFrames.size,2),np.nan)),
+             ('pupilArea',tracking),
+             ('pupilX',deriv),
+             ('pupilY',detected),
+             ('negSaccades',detectedLickFrames),
+             ('posSaccades',np.array([]).astype(int)))
+lickDataFile.attrs.create('mmPerPixel',np.nan)
+for param,d in paramData:
+    lickDataFile.create_dataset(param,data=d,compression='gzip',compression_opts=1)
+lickDataFile.close()
+
+
+# get annotated licks
 lickDataFile = fileIO.getFile('choose lick data file',defaultDir)
 lickData = h5py.File(lickDataFile,'r')
-roiIntensity = lickData['pupilArea'][:]
 annotatedLickFrames = lickData['posSaccades'][:]
 annotatedLickTimes = camFrameTimes[annotatedLickFrames]
 lickData.close()
