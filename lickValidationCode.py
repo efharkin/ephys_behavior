@@ -38,10 +38,10 @@ def getFirstLicks(lickTimes,minBoutInterval=0.5):
 analogDataFile = fileIO.getFile() 
 defaultDir = os.path.dirname(analogDataFile)
 
-h = 0.000264 # arduino time step
+h = 0.000265 # arduino time step
 
 analogData = pd.read_csv(analogDataFile,skiprows=2)
-sampRate = 1000
+sampRate = 2500
 data = np.array(analogData['Dev2/ai0'])
 t = np.arange(0,data.size/sampRate,1/sampRate)
 
@@ -71,7 +71,7 @@ den = [1, 2*lamda*wn, wn*wn]
 filtered.append(discretizer.apply_discrete_filter(num, den, h, filtered[1]))
 
 # derivative
-numPointsToBaseline = 189
+numPointsToBaseline = 150
 numPointsToAverage = 10
 d = np.array(filtered[2])
 dprime = d.copy()
