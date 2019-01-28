@@ -1077,7 +1077,7 @@ ax.plot(np.mean(all_psths[1], 0), 'k')
 fig, ax = plt.subplots()
 ax.hist()
 
-
+uid = []
 image_sdfs = []   
 preTime = 0.1
 postTime = 0.5
@@ -1099,7 +1099,7 @@ for s, l in zip(meanImageResps, latency):
     plt.plot(l, s[l], 'ro')
     
 
-early_response = np.max(meanImageResps[:, 160:180], 1)
+early_response = np.max(meanImageResps[:, 130:170], 1)
 
 fig, ax = plt.subplots()
 ax.plot(early_response, change_image_hit_rates, 'ko')
@@ -1110,7 +1110,89 @@ ax.plot(latency, change_image_hit_rates, 'ko')
 formatFigure(fig, ax, xLabel='Respose latency (ms)', yLabel='Hit rate')
 
 fig, ax = plt.subplots()
-ax.plot(np.max(meanImageResps, 1), change_image_hit_rates, 'ko')
+ax.plot(np.mean(meanImageResps, 1), change_image_hit_rates, 'ko')
 formatFigure(fig, ax, xLabel='Mean response magnitude (sp/s)', yLabel='Hit rate')
 
 
+
+
+regionsToConsider=['VIS', 'cc', 'LP', 'LGd']
+unitIDs = np.concatenate([[pid+'_'+str(u) for u in probeSync.getOrderedUnits(units[pid])] for pid in probes_to_run])
+ccgs = []
+regions = []
+u1u2s = []
+for ui, uid in enumerate(unitIDs):
+    pid1, u1 = uid.split('_')
+    u1 = int(u1)
+    region1 = units[pid1][u1]['ccfRegion']
+    if region1 is not None and any([r in region1 for r in regionsToConsider]):
+        spikes = units[pid1][u1]['times']
+        for uid2 in unitIDs[ui:]:
+            pid2, u2 = uid2.split('_')
+            u2 = int(u2)
+            region2 = units[pid2][u2]['ccfRegion']
+            if region2 is not None and any([r in region2 for r in regionsToConsider]):
+                spikes2 = units[pid2][u2]['times']
+                ccg, bins = get_ccg(spikes, spikes2)
+                ccgs.append(ccg)
+                regions.append(region1 + '_' + region2)
+                u1u2s.append(uid + '/' + uid2)
+    
+    
+
+np.save(os.path.join(dataDir, 'ccgs_visctx_thal.npy'), ccgs)
+np.save(os.path.join(dataDir, 'ccg_regions.npy'), regions)
+np.save(os.path.join(dataDir, 'ccg_unitIDs.npy'), u1u2s)
+
+
+
+source = 'LP'
+target = 'VISp'
+source_ccgs = []
+source_u1u2 = []
+targetIDs = []
+for (region, u1u2, ccg) in zip(regions, u1u2s, ccgs):
+    r1, r2 = region.split('_')
+    if (any([source in r for r in (r1,r2)])) and ((target is None) or any([target in r for r in (r1,r2)])): 
+        u1, u2 = u1u2.split('/')
+        if u1 != u2:
+            if source in r1:
+                source_ccgs.append(ccg)
+                source_u1u2.append(u1u2)
+                targetIDs.append(r2)
+            elif source in r2:
+                source_ccgs.append(ccg[::-1])
+                u1, u2 = u1u2.split('/')
+                source_u1u2.append(u2 + '/' + u1)
+                targetIDs.append(r1)
+        
+source_ccgs = np.array(source_ccgs)
+plt.figure()
+plt.plot(np.mean(source_ccgs, 0))
+
+#for source_unit in unitIDs:
+for source_unit in inLP:
+#source_unit = 'A_98'
+    target = 'VISp'
+    source_ccgs = []
+    source_u1u2 = []
+    targetIDs = []
+    for (region, u1u2, ccg) in zip(regions, u1u2s, ccgs):
+        r1, r2 = region.split('_')
+        u1, u2 = u1u2.split('/')
+        if u1 != u2:
+            if (any([source_unit in u for u in (u1, u2)])) and ((target is None) or any([target in r for r in (r1,r2)])): 
+                if source_unit in u1:
+                    source_ccgs.append(ccg)
+                    source_u1u2.append(u1u2)
+                    targetIDs.append(r2)
+                elif source_unit in u2:
+                    source_ccgs.append(ccg[::-1])
+                    source_u1u2.append(u2 + '/' + u1)
+                    targetIDs.append(r1)
+                
+    source_ccgs = np.array(source_ccgs)
+    fig, ax = plt.subplots()
+#    minind = np.unravel_index(np.argmin(source_ccgs), source_ccgs.shape)
+    ax.plot(np.mean(source_ccgs, 0))
+    fig.suptitle(source_unit)

@@ -60,7 +60,7 @@ def get_ccg(spikes1, spikes2, auto=False, width=0.1, bin_width=0.0005, plot=Fals
     n_b = int( np.ceil(width / bin_width) )  # Num. edges per side
     
     # Define the edges of the bins (including rightmost bin)
-    b = np.linspace(-width, width, 2 * n_b, endpoint=True)
+    b = np.linspace(-width, width, 2 * n_b+1, endpoint=True)
     [h, hb] = np.histogram(d, bins=b)
     hh = h.astype(np.float)/(len(spikes1)*len(spikes2))**0.5
     
