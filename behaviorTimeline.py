@@ -108,7 +108,7 @@ for mouseID,ephysDates in mouseInfo:
         ax.set_ylabel(lbl,fontsize=14)
         if i==0:
             ax.set_title(mouseID,fontsize=14)
-        if i==2:
+        if i==len(params)-1:
             ax.set_xlabel('Day',fontsize=14)
     plt.tight_layout()
 
@@ -127,6 +127,7 @@ for day,rig,ephys,rewards in zip(trainingDay,isRig,isEphys,rewardsEarned):
     ephysInd = np.where(ephys)[0]
     numRewards[-1].append(rewards[ephysInd[0]-1])
     numRewards[-1].extend(rewards[ephysInd[:2]])
+    
     
 fig = plt.figure(facecolor='w')
 ax = plt.subplot(1,1,1)
