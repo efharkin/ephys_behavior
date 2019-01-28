@@ -489,3 +489,95 @@ axis.set_yticks(np.arange(0, len(np.unique(xpos)), 2))
 axis.set_xticklabels(tickLabels)
 axis.set_yticklabels(tickLabels)
 
+
+
+# cell x image peak response heat map
+image_flash_times = frameTimes[np.array(core_data['visual_stimuli']['frame'])]
+image_id = np.array(core_data['visual_stimuli']['image_name'])
+
+regionsToConsider = ('VIS','cc')
+
+sdfSigma = 0.005
+preTime = 0.25
+postTime = 0.5
+#resp = []
+for pid in probeIDs:
+    orderedUnits = probeSync.getOrderedUnits(units[pid])
+    for u in orderedUnits:
+        region = units[pid][u]['ccfRegion']
+        if region is not None and any([r in region for r in regionsToConsider]):
+            r = np.zeros(len(imageNames))
+            spikes = units[pid][u]['times']
+            for i,img in enumerate(sorted(imageNames)):
+                this_image_times = image_flash_times[image_id==img]
+                sdf, t = analysis_utils.getSDF(spikes,this_image_times-preTime,preTime+postTime,sigma=sdfSigma)
+                r[i] = sdf[t>preTime].max()-sdf[t<preTime].mean()
+            resp.append(r)
+
+respMat = np.stack(resp)
+normResp = respMat/respMat.max(axis=1)[:,None]
+sortResp = normResp[np.argsort([np.argmax(r) for r in respMat])]
+
+fig = plt.figure(facecolor='w')
+ax = plt.subplot(1,1,1)
+ax.imshow(sortResp,cmap='magma',interpolation='none')
+ax.set_xticks([])
+ax.set_yticks([])
+ax.set_xlabel('Image',fontsize=10)
+ax.set_ylabel('Unit',fontsize=10)
+plt.tight_layout()
+
+fig = plt.figure(facecolor='w')
+ax = plt.subplot(1,1,1)
+ax.plot(np.sum(sortResp==1,axis=0)/sortResp.shape[0],'k',linewidth=2)
+for side in ('right','top'):
+    ax.spines[side].set_visible(False)
+ax.tick_params(direction='out',top=False,right=False,labelsize=14)
+ax.set_xlim([-0.5,7.5])
+ax.set_ylim([0,0.2])
+ax.set_xticks(np.arange(len(imageNames)))
+ax.set_xticklabels(sorted(imageNames))
+ax.set_ylabel('Fraction of Cells Preferred',fontsize=14)
+plt.tight_layout()
+            
+fig = plt.figure(facecolor='w')
+ax = plt.subplot(1,1,1)
+ax.plot(sortResp.mean(axis=0),'k',linewidth=2)
+for side in ('right','top'):
+    ax.spines[side].set_visible(False)
+ax.tick_params(direction='out',top=False,right=False,labelsize=14)
+ax.set_xlim([-0.5,7.5])
+ax.set_ylim([0,0.6])
+ax.set_xticks(np.arange(len(imageNames)))
+ax.set_xticklabels(sorted(imageNames))
+ax.set_ylabel('Population Mean Response',fontsize=14)
+plt.tight_layout()
+
+
+#
+ax = plt.subplot(1,1,1)
+for img in imageNames:
+    licklat = trials['response_latency'][hit & (changeImage==img) & (~ignore)]
+    ax.plot(licklat.size,np.mean(licklat),'ko')
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

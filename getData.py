@@ -77,7 +77,7 @@ trials = create_extended_dataframe(
 
 # Get frame times from sync file
 frameRising, frameFalling = probeSync.get_sync_line_data(syncDataset, 'stim_vsync')
-diode = probeSync.get_sync_line_data(syncDataset, 'photodiode')
+#diode = probeSync.get_sync_line_data(syncDataset, 'photodiode')
 #monitorLags = diode[0][4:4+frameFalling[60::120].size][:100] - frameFalling[60::120][:100]
 monitorLag = 0.036
 frameTimes = frameFalling + monitorLag
@@ -88,7 +88,7 @@ runSpeed = core_data['running'].speed
 
 
 # get eye tracking data
-eyeFrameTimes = probeSync.get_sync_line_data(syncDataset,'cam2_exposure')[1]
+eyeFrameTimes = probeSync.get_sync_line_data(syncDataset,'cam2_exposure')[0]
 
 #camPath = glob.glob(os.path.join(dataDir,'cameras','*-1.h5'))[0]
 #camData = h5py.File(camPath)
