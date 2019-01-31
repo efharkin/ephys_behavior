@@ -21,15 +21,14 @@ import scipy
 from analysis_utils import find_run_transitions
 
 
-dataDir = '\\\\allen\\programs\\braintv\\workgroups\\nc-ophys\\corbettb\\Behavior\\09202018_390339'
-dataDir = 'Z:\\11142018_403468'
+dataDir = 'Z:\\09202018_390339'
 
 sync_file = glob.glob(os.path.join(dataDir, '*.h5'))[0]
 syncDataset = sync.Dataset(sync_file)
 
 
 # get probe data
-probeIDs = ('A', 'B', 'C')
+probeIDs = ['A','B','C']
 
 units = {str(pid): probeSync.getUnitData(dataDir,syncDataset, pid) for pid in probeIDs}
 

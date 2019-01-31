@@ -29,7 +29,7 @@ t = np.arange(0,data.size/sampRate,1/sampRate)
 
 time,uo = discretizer.interpolate_data_to_timestep(t,data,h)
 
-#start,stop = np.where((time>10) & (time<70))[0][[0,-1]]
+#start,stop = np.where((time>35) & (time<39))[0][[0,-1]]
 #pointsToAnalyze = slice(start,stop)
 pointsToAnalyze = slice(0,time.size)
 
@@ -81,7 +81,7 @@ filtered.append(discretizer.apply_schmidt_trigger(K, hi_trigger, lo_trigger, fil
 #    for side in ('right','top'):
 #        ax.spines[side].set_visible(False)
 #    ax.tick_params(direction='out',top=False,right=False,labelsize=12)
-#    ax.set_xlim([44.2,46])
+##    ax.set_xlim([44.2,46])
 ##    ax.set_ylim([0,3])
 #    ax.set_xlabel('Time (s)',fontsize=14)
 #    ax.set_ylabel(lbl,fontsize=14)
@@ -139,14 +139,21 @@ def compareLickTimes(annotatedLickTimes,detectedLickTimes,tolerance=0.1):
     falseNegatives = np.absolute(annotatedLickTimes-detectedLickTimes[:,None]).min(axis=0)>tolerance
     falsePositives = np.absolute(detectedLickTimes-annotatedLickTimes[:,None]).min(axis=0)>tolerance
     return falseNegatives,falsePositives
+    
+    
+syncFile = fileIO.getFile('choose sync file')
+syncDataset = sync.Dataset(syncFile)
+camFrameTimes = probeSync.get_sync_line_data(syncDataset,'cam1_exposure')[0]
+detectedLickTimes = probeSync.get_sync_line_data(syncDataset, 'lick_sensor')[0]
+detectedLickTimes = detectedLickTimes[(detectedLickTimes>camFrameTimes[0]) & (detectedLickTimes<camFrameTimes[-1])]
 
 
 lickDataFile = fileIO.getFile('choose lick data file')
 lickData = h5py.File(lickDataFile,'r')
 annotatedLickFrames = lickData['posSaccades'][:]
 annotatedLickTimes = camFrameTimes[annotatedLickFrames]
-detectedLickFrames = lickData['negSaccades'][:]
-detectedLickTimes = camFrameTimes[detectedLickFrames]
+#detectedLickFrames = lickData['negSaccades'][:]
+#detectedLickTimes = camFrameTimes[detectedLickFrames]
 lickData.close()
 
 
@@ -164,6 +171,7 @@ tolerance = np.arange(0,0.2,1/60)
 undetected = []
 for tol in tolerance:
     fn,fp = compareLickTimes(annotatedLickTimes,detectedLickTimes,tol)
+#    fn,fp = compareLickTimes(annotatedFirstLicks,detectedFirstLicks,tol)
     undetected.append(fn.sum())
 
 fig = plt.figure(facecolor='w')
