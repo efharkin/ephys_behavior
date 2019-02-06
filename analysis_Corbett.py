@@ -1077,26 +1077,48 @@ ax.plot(np.mean(all_psths[1], 0), 'k')
 fig, ax = plt.subplots()
 ax.hist()
 
+##Correlate pop response to hit rate based on all flashes
 uid = []
 image_sdfs = []   
 preTime = 0.1
 postTime = 0.5
-for pid in probes_to_run:
-    for u in probeSync.getOrderedUnits(units[pid]):
-        region = units[pid][u]['ccfRegion']
-        if region is not None and any([r in region for r in regionsToConsider]):
-            spikes = units[pid][u]['times']
-            uid.append(pid+str(u))
-            sdfs, time = make_psth_all_flashes(spikes, frameTimes, core_data, preTime = preTime, postTime = postTime, sdfSigma=0.005)
-            image_sdfs.append(sdfs)
-            
-meanImageResps = np.mean(image_sdfs, 0)            
-latency = np.array([find_latency(s, stdev_thresh=5) for s in meanImageResps]) - 1000*preTime
+allFlashes = False  #if True pop response will be calculated using all flashes of stimulus, if false only change flashes will be used
+if allFlashes:
+    for pid in probes_to_run:
+        for u in probeSync.getOrderedUnits(units[pid]):
+            region = units[pid][u]['ccfRegion']
+            if region is not None and any([r in region for r in regionsToConsider]):
+                spikes = units[pid][u]['times']
+                uid.append(pid+str(u))
+                sdfs, time = make_psth_all_flashes(spikes, frameTimes, core_data, preTime = preTime, postTime = postTime, sdfSigma=0.005)
+                image_sdfs.append(sdfs)
+                
+    meanImageResps = np.mean(image_sdfs, 0)            
+    latency = np.array([find_latency(s, stdev_thresh=5) for s in meanImageResps]) - 1000*preTime
 
-plt.figure()
-for s, l in zip(meanImageResps, latency):
-    plt.plot(s)
-    plt.plot(l, s[l], 'ro')
+else:
+    changeImages = np.array(trials['change_image_name'][~ignore])
+    changeTimes = frameTimes[np.array(trials['change_frame'][~ignore]).astype(int)] 
+    for pid in probes_to_run:
+        for u in probeSync.getOrderedUnits(units[pid]):
+            region = units[pid][u]['ccfRegion']
+            if region is not None and any([r in region for r in regionsToConsider]):
+                spikes = units[pid][u]['times']
+                uid.append(pid+str(u))
+                unit_sdf = []
+                for ii, im in enumerate(np.unique(changeImages)):                    
+                    theseTimes = changeTimes[changeImages==im]
+                    sdf, time = getSDF(spikes, theseTimes-preTime, preTime+postTime, sigma=0.005)
+                    unit_sdf.append(sdf)
+                image_sdfs.append(unit_sdf)
+                
+    meanImageResps = np.mean(image_sdfs, 0)            
+    latency = np.array([find_latency(s, stdev_thresh=5) for s in meanImageResps]) - 1000*preTime
+
+#plt.figure()
+#for s, l in zip(meanImageResps, latency):
+#    plt.plot(s)
+#    plt.plot(l, s[l], 'ro')
     
 
 early_response = np.max(meanImageResps[:, 130:170], 1)
@@ -1112,6 +1134,19 @@ formatFigure(fig, ax, xLabel='Respose latency (ms)', yLabel='Hit rate')
 fig, ax = plt.subplots()
 ax.plot(np.mean(meanImageResps, 1), change_image_hit_rates, 'ko')
 formatFigure(fig, ax, xLabel='Mean response magnitude (sp/s)', yLabel='Hit rate')
+
+fig, ax = plt.subplots()
+for tp in np.arange(meanImageResps.shape[1]):
+    corr = scipy.stats.linregress(np.mean(meanImageResps[:, :tp], 1), change_image_hit_rates)[2]
+    ax.plot(tp, corr, 'ko')
+    
+    corr = scipy.stats.linregress(meanImageResps[:, tp], change_image_hit_rates)[2]
+    ax.plot(tp, corr, 'ro')
+
+
+
+
+
 
 
 
