@@ -16,24 +16,6 @@ import matplotlib.pyplot as plt
 from simlib import discretizer, tektronics, nidaq
 
 
-def addDetectedLicksToAnnotationFile(lickDataFile,detectedLickFrames):
-    lickData = h5py.File(lickDataFile,'r')
-    newFile = h5py.File(lickDataFile[:-5]+'_withDetected'+'.hdf5','w',libver='latest')
-    for key in lickData.attrs.keys():
-        newFile.attrs.create(key,lickData.attrs[key])
-    for key in lickData.keys():
-        if key!='negSaccades':
-            newFile.create_dataset(key,data=lickData[key][:],compression='gzip',compression_opts=1)
-    newFile.create_dataset('negSaccades',data=detectedLickFrames,compression='gzip',compression_opts=1)
-    lickData.close()
-    newFile.close()
-
-def getFirstLicks(lickTimes,minBoutInterval=0.5):
-    lickIntervals = np.diff(lickTimes)
-    return lickTimes[np.concatenate(([0],np.where(lickIntervals>minBoutInterval)[0]+1))]
-    
-
-
 # process analog signal
 analogDataFile = fileIO.getFile() 
 defaultDir = os.path.dirname(analogDataFile)
@@ -46,7 +28,11 @@ data = np.array(analogData['Dev2/ai0'])
 t = np.arange(0,data.size/sampRate,1/sampRate)
 
 time,uo = discretizer.interpolate_data_to_timestep(t,data,h)
+
+#start,stop = np.where((time>35) & (time<39))[0][[0,-1]]
+#pointsToAnalyze = slice(start,stop)
 pointsToAnalyze = slice(0,time.size)
+
 time = time[pointsToAnalyze]
 uo = uo[pointsToAnalyze]
 filtered = []
@@ -87,15 +73,19 @@ hi_trigger = 0.04
 lo_trigger = -0.01
 filtered.append(discretizer.apply_schmidt_trigger(K, hi_trigger, lo_trigger, filtered[3]))
 
-# plot
-#n = 10000
-#plt.figure()
-#plt.plot(time[:n], uo[:n])
-#for f in filtered:
-#    plt.plot(time[:n], f[:n])
-#plt.ylabel('Signal')
-#plt.xlabel('Time (s)')
-#plt.legend(['Analog Data','Bandpass','Rectify','Track','Deriv','Schmidt'])
+
+#for d,lbl in zip([uo]+filtered,['Analog Data','Bandpass','Rectify','Tracking','Derivative','Schmidt']):
+#    fig = plt.figure(facecolor='w',figsize=(18,6))
+#    ax = plt.subplot(1,1,1)
+#    ax.plot(time,d,'k')
+#    for side in ('right','top'):
+#        ax.spines[side].set_visible(False)
+#    ax.tick_params(direction='out',top=False,right=False,labelsize=12)
+##    ax.set_xlim([44.2,46])
+##    ax.set_ylim([0,3])
+#    ax.set_xlabel('Time (s)',fontsize=14)
+#    ax.set_ylabel(lbl,fontsize=14)
+#    plt.tight_layout()
 
 
 # get frame times and detected licks from sync file
@@ -138,24 +128,65 @@ for param,d in paramData:
 lickDataFile.close()
 
 
-# get annotated licks
-lickDataFile = fileIO.getFile('choose lick data file',defaultDir)
+
+
+# analyze annotated licks
+def getFirstLicks(lickTimes,minBoutInterval=0.5):
+    lickIntervals = np.diff(lickTimes)
+    return lickTimes[np.concatenate(([0],np.where(lickIntervals>minBoutInterval)[0]+1))]
+    
+def compareLickTimes(annotatedLickTimes,detectedLickTimes,tolerance=0.1):
+    falseNegatives = np.absolute(annotatedLickTimes-detectedLickTimes[:,None]).min(axis=0)>tolerance
+    falsePositives = np.absolute(detectedLickTimes-annotatedLickTimes[:,None]).min(axis=0)>tolerance
+    return falseNegatives,falsePositives
+    
+    
+syncFile = fileIO.getFile('choose sync file')
+syncDataset = sync.Dataset(syncFile)
+camFrameTimes = probeSync.get_sync_line_data(syncDataset,'cam1_exposure')[0]
+detectedLickTimes = probeSync.get_sync_line_data(syncDataset, 'lick_sensor')[0]
+detectedLickTimes = detectedLickTimes[(detectedLickTimes>camFrameTimes[0]) & (detectedLickTimes<camFrameTimes[-1])]
+
+
+lickDataFile = fileIO.getFile('choose lick data file')
 lickData = h5py.File(lickDataFile,'r')
 annotatedLickFrames = lickData['posSaccades'][:]
 annotatedLickTimes = camFrameTimes[annotatedLickFrames]
+#detectedLickFrames = lickData['negSaccades'][:]
+#detectedLickTimes = camFrameTimes[detectedLickFrames]
 lickData.close()
 
 
-firstLicks = getFirstLicks(annotatedLickTimes)
+falseNeg,falsePos = compareLickTimes(annotatedLickTimes,detectedLickTimes)
+print('all lick false negatives = '+str(falseNeg.sum())+'/'+str(falseNeg.size))
+
+annotatedFirstLicks = getFirstLicks(annotatedLickTimes)
 detectedFirstLicks = getFirstLicks(detectedLickTimes)
 
-
-lickComparisonTolerance = 0.1
-
-falseNegatives = np.absolute(firstLicks-detectedFirstLicks[:,None]).min(axis=0)>lickComparisonTolerance
+falseNegFirst,falsePosFirst = compareLickTimes(annotatedFirstLicks,detectedFirstLicks)
+print('first lick false negatives = '+str(falseNegFirst.sum())+'/'+str(falseNegFirst.size))
 
 
-falsePositives = np.absolute(detectedFirstLicks-firstLicks[:,None]).min(axis=0)>lickComparisonTolerance
+tolerance = np.arange(0,0.2,1/60)
+undetected = []
+for tol in tolerance:
+    fn,fp = compareLickTimes(annotatedLickTimes,detectedLickTimes,tol)
+#    fn,fp = compareLickTimes(annotatedFirstLicks,detectedFirstLicks,tol)
+    undetected.append(fn.sum())
+
+fig = plt.figure(facecolor='w')
+ax = plt.subplot(1,1,1)
+ax.plot(tolerance,1-np.array(undetected)/annotatedLickTimes.size,'ko',ms=10)
+for side in ('right','top'):
+    ax.spines[side].set_visible(False)
+ax.tick_params(direction='out',top=False,right=False,labelsize=12)
+ax.set_xlim([0,0.14])
+ax.set_ylim([0,1.015])
+ax.set_xlabel('Tolerance (s)',fontsize=14)
+ax.set_ylabel('Fraction of licks detected',fontsize=14)
+plt.tight_layout()
+
+    
 
 
 

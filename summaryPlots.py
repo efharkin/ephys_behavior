@@ -172,7 +172,7 @@ def plot_unit_behavior_summary(pid, uid, multipageObj=None):
     plot_saccade_triggered_fr(spikes, saccadeax)
     if multipageObj is not None:
         fig.savefig(multipageObj, format='pdf')
-    plt.close(fig)
+        plt.close(fig)
 
 
 def plot_images(axes):
@@ -455,10 +455,10 @@ def plot_saccade_triggered_fr(spikes, axis, preTime=2, postTime=2, sdfSigma=0.02
 
     for side in ('right','top'):
         axis.spines[side].set_visible(False)
-    axis.tick_params(direction='out',top=False,right=False,labelsize=10)
+    axis.tick_params(direction='out',top=False,right=False,labelsize=12)
     axis.set_xlim([-preTime,postTime])
     axis.set_ylim([0,1.02*ymax])
-    axis.set_xlabel('Time relative to saccade (s)',fontsize=12)
-    axis.set_ylabel('Spike/s',fontsize=12)
+    axis.set_xlabel('Time relative to saccade (s)',fontsize=14)
+    axis.set_ylabel('Spike/s',fontsize=14)
     axis.legend((plotlines[0], plotlines[1]), ('temporal', 'nasal'), loc='best', prop={'size':8})
 

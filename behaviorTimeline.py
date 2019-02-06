@@ -29,7 +29,7 @@ isImages = []
 isRig = []
 isEphys = []
 rewardsEarned = []
-for mouseID,ephysDates in mouseInfo: 
+for mouseID,ephysDates in mouseInfo[:2]: 
     ephysDateTimes = [datetime.datetime.strptime(d,'%m%d%Y') for d in ephysDates] if ephysDates is not None else (None,)
     frameRate = 60
     window = 300*frameRate
