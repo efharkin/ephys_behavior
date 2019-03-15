@@ -22,25 +22,27 @@ def behavior_summary(tag=''):
     
     startFrame = int(trials['startframe'][0])
     startTime = frameTimes[startFrame]
+    prePostGrayTime = core_data['metadata']['params']['start_stop_padding']
     endFrame = int(trials['endframe'][hit.size-1])
-    endTime = frameTimes[endFrame]   
+    endTime = frameTimes[endFrame]  
     
     fig = plt.figure(facecolor='w',figsize=(18,10))
     ax = plt.subplot(4,1,1)
+    ax.add_patch(patches.Rectangle([startTime-prePostGrayTime,-preTime],width=prePostGrayTime,height=preTime+postTime,color='0.9',alpha=0.5))
     selectedTrials = ~earlyResponse
     changeTimes = frameTimes[np.array(trials['change_frame'][selectedTrials]).astype(int)]
     for trialIndex,t in zip(np.where(selectedTrials)[0],changeTimes):
         licks = frameTimes[np.array(trials['lick_frames'][trialIndex]).astype(int)]-t
-        ax.plot(t-startTime+np.zeros(licks.size),licks,'o',mec='0.5',mfc='none',ms=3)
+        ax.plot(t+np.zeros(licks.size),licks,'o',mec='0.5',mfc='none',ms=3)
         reward = frameTimes[np.array(trials['reward_frames'][trialIndex]).astype(int)]-t
         m = 's' if autoRewarded[trialIndex] else 'o'
-        ax.plot(t-startTime+np.zeros(reward.size),reward,m,mec='0.5',mfc='0.5',ms=3)
+        ax.plot(t+np.zeros(reward.size),reward,m,mec='0.5',mfc='0.5',ms=3)
     for resp,clr in zip((hit,miss,falseAlarm,correctReject),'bkrg'):
         ax.plot(changeTimes[resp[selectedTrials]],-preTime/2+np.zeros(resp.sum()),'s',mec=clr,mfc='none',ms=3)
     for side in ('right','top'):
         ax.spines[side].set_visible(False)
     ax.tick_params(direction='out',top=False,right=False,labelsize=10)
-    ax.set_xlim([0,endTime-startTime])
+    ax.set_xlim([0,endTime])
     ax.set_ylim([-preTime,postTime])
     ax.set_ylabel('Time to image change (s)',fontsize=12)
     
@@ -49,16 +51,16 @@ def behavior_summary(tag=''):
     for side in ('right','top'):
         ax.spines[side].set_visible(False)
     ax.tick_params(direction='out',top=False,right=False,labelsize=10)
-    ax.set_xlim([0,endTime-startTime])
+    ax.set_xlim([0,endTime])
     ax.set_ylabel('Speed',fontsize=12)
     
     ax = plt.subplot(4,1,3)
     for resp,clr,lbl in zip((hit,miss,falseAlarm,correctReject),'bkrg',('hit','miss','false alarm','correct reject')):
-        ax.plot(changeTimes-startTime,np.cumsum(resp[selectedTrials]),clr,label=lbl)
+        ax.plot(changeTimes,np.cumsum(resp[selectedTrials]),clr,label=lbl)
     for side in ('right','top'):
         ax.spines[side].set_visible(False)
     ax.tick_params(direction='out',top=False,right=False,labelsize=10)
-    ax.set_xlim([0,endTime-startTime])
+    ax.set_xlim([0,endTime])
     ax.set_ylabel('Count',fontsize=12)
     ax.legend()
     
@@ -82,12 +84,12 @@ def behavior_summary(tag=''):
         elif falseAlarmProb[i]==0:
             falseAlarmProb[i] = 0.5/(fa+cr)
         d[i] = scipy.stats.norm.ppf(hitProb[i])-scipy.stats.norm.ppf(falseAlarmProb[i])
-    ax.plot(frameTimes[dframes]-startTime,hitProb,'b',label='hit')
-    ax.plot(frameTimes[dframes]-startTime,falseAlarmProb,'r',label='false alarm')
+    ax.plot(frameTimes[dframes],hitProb,'b',label='hit')
+    ax.plot(frameTimes[dframes],falseAlarmProb,'r',label='false alarm')
     for side in ('right','top'):
         ax.spines[side].set_visible(False)
     ax.tick_params(direction='out',top=False,right=False,labelsize=10)
-    ax.set_xlim([0,endTime-startTime])
+    ax.set_xlim([0,endTime])
     ax.set_ylim([0,1])
     ax.set_ylabel('Probability',fontsize=12)
     ax.set_xlabel('Time (s)',fontsize=12)

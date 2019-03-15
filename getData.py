@@ -21,7 +21,7 @@ import scipy
 from analysis_utils import find_run_transitions
 
 
-dataDir = 'Z:\\09202018_390339'
+dataDir = 'Z:\\03142019_416656'
 
 sync_file = glob.glob(os.path.join(dataDir, '*.h5'))[0]
 syncDataset = sync.Dataset(sync_file)
