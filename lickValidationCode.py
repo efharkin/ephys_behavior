@@ -98,7 +98,7 @@ detectedLickTimes = probeSync.get_sync_line_data(syncDataset, 'lick_sensor')[0]
 detectedLickTimes = detectedLickTimes[(detectedLickTimes>camFrameTimes[0]) & (detectedLickTimes<camFrameTimes[-1])]
 detectedLickFrames = np.searchsorted(camFrameTimes,detectedLickTimes)
 
-#camFile = fileIO.getFile('choose camera metadata file',defaultDir)
+#camFile = fileIO.getFile('choose camera metadata file')
 #camData = h5py.File(camFile,'r')
 #frameIntervals = camData['frame_intervals'][:]
 #camData.close()
