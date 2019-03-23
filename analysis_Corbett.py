@@ -943,10 +943,12 @@ for r, label in zip(rs.T, labels):
 ###### classify image identity ######
 
 from sklearn.ensemble import RandomForestClassifier
+from sklearn.model_selection import train_test_split
 
 clf = RandomForestClassifier(1000, min_samples_split=5)
 
-selectedTrials = miss & (~ignore)
+#selectedTrials = miss & (~ignore)
+selectedTrials = ~ignore
 changeTimes = frameTimes[np.array(trials['change_frame'][selectedTrials]).astype(int)]
 changeImages = np.array(trials['change_image_name'][selectedTrials])
 initialImages = np.array(trials['initial_image_name'][selectedTrials])
@@ -982,8 +984,8 @@ for i, fi in enumerate(np.reshape(f_importance_miss, [59, -1])):
     
 
 # same as above using psths not sdfs
-preTime = 1
-postTime = 5
+preTime = 0.5
+postTime = 0.5
 all_psths = []
 uid = []
 baselines = []
@@ -993,17 +995,19 @@ for pid in probes_to_run:
         if region is not None and any([r in region for r in regionsToConsider]):
             spikes = units[pid][u]['times']
             uid.append(pid+str(u))
-            psth = makePSTH(spikes, changeTimes-preTime, preTime+postTime, binSize=0.01, avg=False)
+            psth = makePSTH(spikes, changeTimes-preTime, preTime+postTime, binSize=0.001, avg=False)
             if len(all_psths) == 0:
                 all_psths = np.copy(psth)
-                baselines = np.copy(psth[:, 530:550])
+#                baselines = np.copy(psth[:, 530:550])
                 
             else:
                 all_psths = np.hstack([all_psths, psth])
-                baselines = np.hstack([baselines, psth[:, 300:320]])
+#                baselines = np.hstack([baselines, psth[:, 300:320]])
 
-
-clf.fit(all_psths, changeImages)
+psth_train, psth_test, image_train, image_test = train_test_split(all_psths, changeImages, test_size=0.5)
+clf.fit(psth_train, image_train)
+score = clf.score(psth_test, image_test)
+print(score)
 f_psth_importance = clf.feature_importances_
 
 plt.figure()
@@ -1012,7 +1016,48 @@ plt.plot(np.mean(np.reshape(f_psth_importance, [len(uid), -1]), 0))
 for i, fi in enumerate(np.reshape(f_psth_importance, [len(uid), -1])):
     plt.figure(uid[i])
     plt.plot(fi)
-            
+
+
+# classify on several postTime intervals to "simulate" cortical silencing experiment
+scores = []
+startTime = 0
+endTime = 0.5
+timeStep = 0.01
+for postTime in np.arange(startTime, endTime, timeStep):
+    preTime = 0.5
+    all_psths = []
+    uid = []
+    baselines = []
+    for pid in probes_to_run:
+        for u in probeSync.getOrderedUnits(units[pid]):
+            region = units[pid][u]['ccfRegion']
+            if region is not None and any([r in region for r in regionsToConsider]):
+                spikes = units[pid][u]['times']
+                uid.append(pid+str(u))
+                psth = makePSTH(spikes, changeTimes-preTime, preTime+postTime, binSize=0.01, avg=False)
+                if len(all_psths) == 0:
+                    all_psths = np.copy(psth)
+                    baselines = np.copy(psth[:, 530:550])
+                    
+                else:
+                    all_psths = np.hstack([all_psths, psth])
+                    baselines = np.hstack([baselines, psth[:, 300:320]])
+    
+    psth_train, psth_test, image_train, image_test = train_test_split(all_psths, changeImages, test_size=0.5)
+    clf.fit(psth_train, image_train)
+    scores.append(clf.score(psth_test, image_test))
+    
+fig, ax = plt.subplots()
+ax.plot(np.arange(startTime, endTime, timeStep), scores, 'ko-')
+ax.vlines(0.08, 0, 1, 'k')
+   
+ap = np.reshape(all_psths, [len(all_psths), len(uid), -1])
+ap_mean = np.mean(ap, axis=(0,1))
+ap_mean /= ap_mean.max()
+ax.plot(np.arange(startTime, endTime, timeStep)[1:], ap_mean[int(preTime*100):], 'k')
+    
+    
+    
             
 # same as above predicting image before change
 preTime = 2
@@ -1036,7 +1081,10 @@ for pid in probes_to_run:
                 baselines = np.hstack([baselines, psth[:, 180:200]])
 
 
-clf.fit(all_psths, initialImages)
+psth_train, psth_test, image_train, image_test = train_test_split(all_psths, changeImages, test_size=0.5)
+clf.fit(psth_train, image_train)
+score = clf.score(psth_test, image_test)
+print(score)
 f_psth_importance = clf.feature_importances_
 
 plt.figure()
@@ -1077,12 +1125,35 @@ ax.plot(np.mean(all_psths[1], 0), 'k')
 fig, ax = plt.subplots()
 ax.hist()
 
-##Correlate pop response to hit rate based on all flashes
+######Correlate pop response to hit rate##########
+
+#get hit rates for each image
+changeCounts = []
+initialCounts = []
+for ir, respType in enumerate((hit, miss)):
+    selectedTrials = respType & (~ignore)
+    changeImages = np.array(trials['change_image_name'][selectedTrials])
+    initialImages = np.array(trials['initial_image_name'][selectedTrials])
+
+    changeCounts.append([np.sum(changeImages==im) for im in np.unique(changeImages)])
+    initialCounts.append([np.sum(initialImages==im) for im in np.unique(initialImages)])
+
+changeCounts = np.array(changeCounts)
+initialCounts = np.array(initialCounts)
+    
+changeTotals = np.sum(changeCounts, 0).astype(np.float)
+initialTotals = np.sum(initialCounts,0).astype(np.float)
+
+change_image_hit_rates = changeCounts[0]/changeTotals
+
+
+#calculate pop response to each image
+regionsToConsider = ['VIS', 'cc']
 uid = []
 image_sdfs = []   
 preTime = 0.1
 postTime = 0.5
-allFlashes = False  #if True pop response will be calculated using all flashes of stimulus, if false only change flashes will be used
+allFlashes = True  #if True pop response will be calculated using all flashes of stimulus, if false only change flashes will be used
 if allFlashes:
     for pid in probes_to_run:
         for u in probeSync.getOrderedUnits(units[pid]):
@@ -1115,13 +1186,22 @@ else:
     meanImageResps = np.mean(image_sdfs, 0)            
     latency = np.array([find_latency(s, stdev_thresh=5) for s in meanImageResps]) - 1000*preTime
 
-#plt.figure()
-#for s, l in zip(meanImageResps, latency):
-#    plt.plot(s)
-#    plt.plot(l, s[l], 'ro')
+fig, ax = plt.subplots()
+fig_in, ax_in = plt.subplots()
+for i, (s, l) in enumerate(zip(meanImageResps, latency.astype(np.int) + int(1000*preTime))):
+    ax.plot(s[100:200])
+    ax.plot(l-100, s[100:200][l-100], 'ro')    
+    ax.set_ylim([0, 30])
+    
+    ax_in.plot(s)
+    ax_in.plot(l, s[l], 'ro')    
+    ax_in.set_ylim([0, 30])
     
 
-early_response = np.max(meanImageResps[:, 130:170], 1)
+
+#plot correlation between pop response and hit rate
+early_response = np.mean(meanImageResps[:, 130:160], 1)
+full_response = np.mean(meanImageResps[:, 130:400], 1)
 
 fig, ax = plt.subplots()
 ax.plot(early_response, change_image_hit_rates, 'ko')
@@ -1129,10 +1209,10 @@ formatFigure(fig, ax, xLabel='Early response magnitude (sp/s)', yLabel='Hit rate
 
 fig, ax = plt.subplots()
 ax.plot(latency, change_image_hit_rates, 'ko')
-formatFigure(fig, ax, xLabel='Respose latency (ms)', yLabel='Hit rate')
+formatFigure(fig, ax, xLabel='Response latency (ms)', yLabel='Hit rate')
 
 fig, ax = plt.subplots()
-ax.plot(np.mean(meanImageResps, 1), change_image_hit_rates, 'ko')
+ax.plot(full_response, change_image_hit_rates, 'ko')
 formatFigure(fig, ax, xLabel='Mean response magnitude (sp/s)', yLabel='Hit rate')
 
 fig, ax = plt.subplots()
@@ -1152,6 +1232,7 @@ for tp in np.arange(meanImageResps.shape[1]):
 
 
 regionsToConsider=['VIS', 'cc', 'LP', 'LGd']
+regionsToConsider=['VIS', 'cc']
 unitIDs = np.concatenate([[pid+'_'+str(u) for u in probeSync.getOrderedUnits(units[pid])] for pid in probes_to_run])
 ccgs = []
 regions = []
@@ -1181,14 +1262,15 @@ np.save(os.path.join(dataDir, 'ccg_unitIDs.npy'), u1u2s)
 
 
 
-source = 'LP'
+source = 'VISp'
 target = 'VISp'
 source_ccgs = []
 source_u1u2 = []
 targetIDs = []
 for (region, u1u2, ccg) in zip(regions, u1u2s, ccgs):
     r1, r2 = region.split('_')
-    if (any([source in r for r in (r1,r2)])) and ((target is None) or any([target in r for r in (r1,r2)])): 
+#    if (any([source in r for r in (r1,r2)])) and ((target is None) or any([target in r for r in (r1,r2)])): 
+    if ((source in r1) and (target in r2)) or ((source in r2) and (target in r1)):
         u1, u2 = u1u2.split('/')
         if u1 != u2:
             if source in r1:
