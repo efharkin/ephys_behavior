@@ -16,17 +16,18 @@ import matplotlib.pyplot as plt
 from simlib import discretizer, tektronics, nidaq
 
 
-# process analog signal
+# get analog data
 analogDataFile = fileIO.getFile() 
 defaultDir = os.path.dirname(analogDataFile)
-
-h = 0.000265 # arduino time step
 
 analogData = pd.read_csv(analogDataFile,skiprows=2)
 sampRate = 2500
 data = np.array(analogData['Dev2/ai0'])
-t = np.arange(0,data.size/sampRate,1/sampRate)
 
+
+# process analog signal
+t = np.arange(0,data.size/sampRate,1/sampRate)
+h = 0.000265 # arduino time step
 time,uo = discretizer.interpolate_data_to_timestep(t,data,h)
 
 #start,stop = np.where((time>35) & (time<39))[0][[0,-1]]
@@ -110,6 +111,34 @@ firstAnalogFrame = np.where(camExp[1:]>2.5)[0][0]
 camFrameSamples = firstAnalogFrame+np.concatenate(([0],np.round(np.cumsum(np.diff(camFrameTimes))*sampRate).astype(int)))
 tracking,deriv,detected = (discretizer.interpolate_data_to_timestep(time,filtered[i],1/sampRate)[1][camFrameSamples] for i in (-3,-2,-1))
 detected = np.clip(detected,0.001,None,detected)
+
+
+# save analog data with detected and annotated lick times for Martin
+#detectedLickSamples = camFrameSamples[detectedLickFrames]
+#
+#lickDataFile = fileIO.getFile('choose lick data file',defaultDir)
+#lickData = h5py.File(lickDataFile,'r')
+#annotatedLickFrames = lickData['posSaccades'][:]
+#lickData.close()
+#annotatedLickSamples = camFrameSamples[annotatedLickFrames]
+#
+#savePath = fileIO.saveFile('save file for Martin as',defaultDir,fileType='*.npz')
+#np.savez_compressed(savePath,
+#                    sampleRate=sampRate,
+#                    analogSignal=data,
+#                    detectedLickSamples=detectedLickSamples,
+#                    annotatedLickSamples=annotatedLickSamples)
+#
+#dataFile = np.load(savePath)
+#
+#lastPlotSample = dataFile['annotatedLickSamples'][-1]+dataFile['sampleRate']
+#ax = plt.subplot(111)
+#ax.plot(dataFile['analogSignal'][:lastPlotSample],'k')
+#ax.plot(dataFile['detectedLickSamples'],-0.1+np.zeros(dataFile['detectedLickSamples'].size),'ro')
+#ax.plot(dataFile['annotatedLickSamples'],-0.2+np.zeros(dataFile['annotatedLickSamples'].size),'bo')
+#ax.set_xlim([0,lastPlotSample])
+#
+#dataFile.close()
 
 
 # make lick data file
