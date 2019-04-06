@@ -21,16 +21,18 @@ import scipy
 from analysis_utils import find_run_transitions
 
 
-dataDir = 'Z:\\03142019_416656'
+dataDir = 'Z:\\03122019_416656'
 
 sync_file = glob.glob(os.path.join(dataDir, '*.h5'))[0]
 syncDataset = sync.Dataset(sync_file)
 
 
 # get probe data
-probeIDs = ['A','B','C']
+probeIDs = ['A','B','C', 'D', 'E', 'F']
+probeIDs=['A']
+probePXIDict = {'A': 'slot2-probe1', 'B': 'slot2-probe2', 'C': 'slot2-probe3', 'D': 'slot3-probe1', 'E': 'slot3-probe2', 'F': 'slot3-probe4'}
 
-units = {str(pid): probeSync.getUnitData(dataDir,syncDataset, pid) for pid in probeIDs}
+units = {str(pid): probeSync.getUnitData(dataDir,syncDataset, pid, probePXIDict) for pid in probeIDs}
 
 
 # get unit CCF positions

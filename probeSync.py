@@ -13,16 +13,28 @@ import glob
 import os
 
 
-def getUnitData(dataDir,syncDataset,probeID):
-    probeDir =  glob.glob(os.path.join(dataDir,'*Probe'+probeID+'_sorted'))[0]   
+def getUnitData(dataDir,syncDataset,probeID, probePXIDict, probeGen = '3b'):
+    if probeGen is '3a':
+        probeDir =  glob.glob(os.path.join(dataDir,'*Probe'+probeID+'_sorted'))[0]   
+        probeTTLDir = os.path.join(probeDir,'events\\Neuropix-3a-100.0\\TTL_1')
+        probeSpikeDir = os.path.join(probeDir,'continuous\\Neuropix-3a-100.0')
+        
+    elif probeGen is '3b':
+        eventsDir = os.path.join(dataDir, 'events')
+        probeTTLDir = os.path.join(os.path.join(eventsDir,'Neuropix-PXI-' + probePXIDict[probeID]), 'TTL_1')
+        probeSpikeDir = os.path.join(dataDir, 'Neuropix-PXI-' + probePXIDict[probeID] + '-AP_sortingResults')
+    
+    print(probeTTLDir)
+    print(probeSpikeDir)
     
     #Get barcodes from sync file
     bRising, bFalling = get_sync_line_data(syncDataset, 'barcode')
     bs_t, bs = ecephys.extract_barcodes_from_times(bRising, bFalling)
     
     #Get barcodes from ephys data
-    channel_states = np.load(os.path.join(probeDir,'events\\Neuropix-3a-100.0\\TTL_1\\channel_states.npy'))
-    event_times = np.load(os.path.join(probeDir,'events\\Neuropix-3a-100.0\\TTL_1\\event_timestamps.npy'))
+    
+    channel_states = np.load(os.path.join(probeTTLDir, 'channel_states.npy'))
+    event_times = np.load(os.path.join(probeTTLDir, 'event_timestamps.npy'))
     
     beRising = event_times[channel_states>0]/30000.
     beFalling = event_times[channel_states<0]/30000.
@@ -30,11 +42,10 @@ def getUnitData(dataDir,syncDataset,probeID):
     
     #Compute time shift between ephys and sync
     shift, p_sampleRate, m_endpoints = ecephys.get_probe_time_offset(bs_t, bs, be_t, be, 0, 30000)
-    be_t_shifted = (be_t/(p_sampleRate/30000)) - shift #just to check that the shift and scale are right
+    #be_t_shifted = (be_t/(p_sampleRate/30000)) - shift #just to check that the shift and scale are right
     
     #Get unit spike times 
-    spike_data_dir = os.path.join(probeDir,'continuous\\Neuropix-3a-100.0')
-    units = load_spike_info(spike_data_dir, p_sampleRate, shift)
+    units = load_spike_info(probeSpikeDir, p_sampleRate, shift)
     
     return units
 
@@ -79,6 +90,7 @@ def load_spike_info(spike_data_dir, p_sampleRate, shift):
         p_sampleRate: probe sampling rate according to master clock
         shift: time shift between master and probe clock
         p_sampleRate and shift are outputs from 'get_probe_time_offset' function
+        sortMode: if KS, read in automatically generated labels from Kilosort; if phy read in phy labels
         
         Returns
         ----------
@@ -93,7 +105,16 @@ def load_spike_info(spike_data_dir, p_sampleRate, shift):
     
     spike_clusters = np.load(os.path.join(spike_data_dir, 'spike_clusters.npy'))
     spike_times = np.load(os.path.join(spike_data_dir, 'spike_times.npy'))
-    cluster_ids = pd.read_csv(os.path.join(spike_data_dir, 'cluster_groups.csv'), sep='\t')
+    try:
+        cluster_ids = pd.read_csv(os.path.join(spike_data_dir, 'cluster_groups.csv'), sep='\t')
+        group = 'group'
+    except:
+        cluster_ids = pd.read_csv(os.path.join(spike_data_dir, 'cluster_KSLabel.tsv'), sep='\t')            
+        group = 'KSLabel'
+#    if sortMode is 'KS':
+#        cluster_ids = pd.read_csv(os.path.join(spike_data_dir, 'cluster_KSLabel.tsv'), sep='\t')
+#    elif sortMode is 'phy':
+#        cluster_ids = pd.read_csv(os.path.join(spike_data_dir, 'cluster_groups.csv'), sep='\t')
     templates = np.load(os.path.join(spike_data_dir, 'templates.npy'))
     spike_templates = np.load(os.path.join(spike_data_dir, 'spike_templates.npy'))
     channel_positions = np.load(os.path.join(spike_data_dir, 'channel_positions.npy'))
@@ -103,7 +124,7 @@ def load_spike_info(spike_data_dir, p_sampleRate, shift):
     units = {}
     for u in unit_ids:
         units[u] = {}
-        units[u]['label'] = cluster_ids[cluster_ids['cluster_id']==u]['group'].tolist()[0]
+        units[u]['label'] = cluster_ids[cluster_ids['cluster_id']==u][group].tolist()[0]
         
         unit_idx = np.where(spike_clusters==u)[0]
         unit_sp_times = spike_times[unit_idx]/p_sampleRate - shift
