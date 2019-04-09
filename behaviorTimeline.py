@@ -140,39 +140,67 @@ for ind,(mouseID,ephysDates) in enumerate(mouseInfo):
 labels = ('NSB','Rig1','RigLast','Ephys1','Ephys2')
 numRewards = []
 dpr = []
-for day,rig,ephys,rewards,d in zip(trainingDay,isRig,isEphys,rewardsEarned,dprime):
+engaged = []
+for day,rig,ephys,rewards,d,eng in zip(trainingDay,isRig,isEphys,rewardsEarned,dprimeEngaged,probEngaged):
     numRewards.append([])
     dpr.append([])
+    engaged.append([])
     sortOrder = np.argsort(day)
-    rig,ephys,rewards,d = [np.array(a)[sortOrder] for a in (rig,ephys,rewards,d)]
+    rig,ephys,rewards,d,eng = [np.array(a)[sortOrder] for a in (rig,ephys,rewards,d,eng)]
     if not all(rig):
         lastNSBDay = np.where(~rig)[0][-1]
         numRewards[-1].append(rewards[lastNSBDay])
         dpr[-1].append(d[lastNSBDay])
+        engaged[-1].append(eng[lastNSBDay])
         firstRigDay = np.where(rig)[0][0]
         numRewards[-1].append(rewards[firstRigDay])
         dpr[-1].append(d[firstRigDay])
+        engaged[-1].append(eng[firstRigDay])
     else:
         numRewards[-1].extend([np.nan]*2)
         dpr[-1].extend(([np.nan]*2))
+        engaged[-1].extend(([np.nan]*2))
     ephysInd = np.where(ephys)[0]
     lastNonEphysDay = ephysInd[0]-1
     numRewards[-1].append(rewards[lastNonEphysDay])
     dpr[-1].append(d[lastNonEphysDay])
+    engaged[-1].append(eng[lastNonEphysDay])    
     ephysDays = ephysInd[:2]
     numRewards[-1].extend(rewards[ephysDays])
     dpr[-1].extend(d[ephysDays])
+    engaged[-1].extend(eng[ephysDays])
+    if len(ephysDays)<2:
+        numRewards[-1].append(np.nan)
+        dpr[-1].append(np.nan)
+        engaged[-1].append(np.nan)
 
+params = (numRewards,dpr,engaged)
 fig = plt.figure(facecolor='w')
-for i,(param,ylab) in enumerate(zip((numRewards,dpr),('Rewards Earned','d prime'))): 
-    ax = plt.subplot(2,1,i+1)
-    for p,rig in zip(param,isRig):
+for i,(prm,ylab) in enumerate(zip(params,('Rewards Earned','d prime','prob. engaged'))): 
+    ax = plt.subplot(len(params),1,i+1)
+    for p,rig in zip(prm,isRig):
         mkr = 'o' if not all(rig) else 's'
         ax.plot(np.arange(len(p)),p,'k'+mkr+'-',mfc='none',ms=10)
     for side in ('right','top'):
         ax.spines[side].set_visible(False)
     ax.tick_params(direction='out',top=False,right=False,labelsize=12)
     ax.set_xlim([-0.25,4.25])
+    ax.set_ylim([0,1.05*np.nanmax(prm)])
+    ax.set_xticks(np.arange(len(labels)))
+    ax.set_xticklabels(labels)
+    ax.set_ylabel(ylab,fontsize=12)
+    
+fig = plt.figure(facecolor='w')
+for i,(prm,ylab) in enumerate(zip(params,('Rewards Earned','d prime','prob. engaged'))): 
+    ax = plt.subplot(len(params),1,i+1)
+    for p,rig in zip(prm,isRig):
+        if not all(rig):
+            ax.plot(np.arange(len(p)),p,'k'+mkr+'-',mfc='none',ms=10)
+    for side in ('right','top'):
+        ax.spines[side].set_visible(False)
+    ax.tick_params(direction='out',top=False,right=False,labelsize=12)
+    ax.set_xlim([-0.25,4.25])
+    ax.set_ylim([0,1.05*np.nanmax([i for p in prm for i in p])])
     ax.set_xticks(np.arange(len(labels)))
     ax.set_xticklabels(labels)
     ax.set_ylabel(ylab,fontsize=12)
