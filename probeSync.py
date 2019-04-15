@@ -159,10 +159,18 @@ def getOrderedUnits(units, label=['good']):
     return goodUnits[np.argsort(peakChans)]
     
     
-def getLFPdata(dataDir, pid, syncDataset, num_channels=384):
-    probeDir =  glob.glob(os.path.join(dataDir,'*Probe'+pid+'_sorted'))[0]       
-    lfp_data_dir = os.path.join(probeDir,'continuous\\Neuropix-3a-100.1')
-    lfp_data_file = os.path.join(lfp_data_dir, 'continuous.dat')    
+def getLFPdata(dataDir, pid, syncDataset, probePXIDict, num_channels=384, probeGen = '3b'):
+    
+    if probeGen is '3a':
+        lfp_data_dir = os.path.join(probeDir,'continuous\\Neuropix-3a-100.1')
+        lfp_data_file = os.path.join(lfp_data_dir, 'continuous.dat')    
+        
+    elif probeGen is '3b':
+        eventsDir = os.path.join(dataDir, 'events')
+        probeTTLDir = os.path.join(os.path.join(eventsDir,'Neuropix-PXI-' + probePXIDict[probeID]), 'TTL_1')
+        probeSpikeDir = os.path.join(dataDir, 'Neuropix-PXI-' + probePXIDict[probeID] + '-AP_sortingResults')
+    
+    
         
     if not os.path.exists(lfp_data_file):
         print('Could not find LFP data at ' + lfp_data_file)

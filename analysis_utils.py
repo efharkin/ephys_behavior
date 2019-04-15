@@ -89,21 +89,24 @@ def find_run_transitions(run_signal, run_time, thresh = [1,5], smooth_kernel = 0
     smooth_kernel = smooth_kernel if np.mod(smooth_kernel, 2) == 1 else smooth_kernel + 1 #must be an odd number for median filter
     run_speed_smooth =  scipy.signal.medfilt(run_signal, int(smooth_kernel))
     run_samples = np.where(run_speed_smooth>=thresh[1])[0]
-    run_starts = run_samples[np.insert(np.diff(run_samples)>=inter_run_interval*sample_freq, 0, True)]
-    
-    adjusted_rs = []
-    for rs in run_starts:
-        last_stat_points = np.where(run_speed_smooth[:rs]<=thresh[0])[0]
-        if len(last_stat_points)>0:
-            adjusted = (last_stat_points[-1])
-        else:
-            adjusted = rs
+    if len(run_samples)==0:
+        run_start_times = []
+    else:
+        run_starts = run_samples[np.insert(np.diff(run_samples)>=inter_run_interval*sample_freq, 0, True)]
         
-        if np.median(run_speed_smooth[adjusted:adjusted+min_run_duration*sample_freq]) > thresh[1]:
-            adjusted_rs.append(adjusted)
-    
-    adjusted_rs = np.array(adjusted_rs).astype(np.int)
-    run_start_times = run_time[adjusted_rs]
+        adjusted_rs = []
+        for rs in run_starts:
+            last_stat_points = np.where(run_speed_smooth[:rs]<=thresh[0])[0]
+            if len(last_stat_points)>0:
+                adjusted = (last_stat_points[-1])
+            else:
+                adjusted = rs
+            
+            if np.median(run_speed_smooth[adjusted:adjusted+min_run_duration*sample_freq]) > thresh[1]:
+                adjusted_rs.append(adjusted)
+        
+        adjusted_rs = np.array(adjusted_rs).astype(np.int)
+        run_start_times = run_time[adjusted_rs]
     
     return run_start_times
     
