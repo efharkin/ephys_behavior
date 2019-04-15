@@ -11,9 +11,27 @@ import glob
 import datetime
 import numpy as np
 import pandas as pd
+import scipy
 import matplotlib.pyplot as plt
 from visual_behavior.translator.foraging2 import data_to_change_detection_core
 from visual_behavior.translator.core import create_extended_dataframe
+
+
+def calculateHitRate(hits,misses):
+    n = hits+misses
+    hitRate = hits/n
+    if hitRate==0:
+        hitRate = 0.5/n
+    elif hitRate==1:
+        hitRate = 1-0.5/n
+    return hitRate
+
+def calculateDprime(hits,misses,falseAlarms,correctRejects):
+    hitRate = calculateHitRate(hits,misses)
+    falseAlarmRate = calculateHitRate(falseAlarms,correctRejects)
+    z = [scipy.stats.norm.ppf(r) for r in (hitRate,falseAlarmRate)]
+    return z[0]-z[1]
+
 
 pickleDir = r'\\EphysRoom342\Data\behavior pickle files'
 
@@ -22,22 +40,28 @@ mouseInfo = (('385533',('09072018','09102018','09112018','09172018')),
              ('394873',('10042018','10052018')),
              ('403472',('10312018','11012018')),
              ('403468',('11142018','11152018')),
-             ('412624',('11292018','11302018')))
+             ('412624',('11292018','11302018')),
+             ('416656',('03122019','03132019','03142019')),
+             ('409096',('03212019',)),
+             ('417882',('03262019','03272019')),
+            )
 
 trainingDay = []
 isImages = []
 isRig = []
 isEphys = []
 rewardsEarned = []
-for mouseID,ephysDates in mouseInfo[:2]: 
+dprimeOverall = []
+dprimeEngaged = []
+probEngaged = []
+frameRate = 60.0
+windowFrames = 60*frameRate
+for mouseID,ephysDates in mouseInfo: 
     ephysDateTimes = [datetime.datetime.strptime(d,'%m%d%Y') for d in ephysDates] if ephysDates is not None else (None,)
-    frameRate = 60
-    window = 300*frameRate
-    interval = 60*frameRate
-    rewardThresh = 2/60
     rewardsEarned.append([])
-    lastEngaged = []
-    probEngaged = []
+    dprimeOverall.append([])
+    dprimeEngaged.append([])
+    probEngaged.append([])
     trainingDate = []
     trainingStage = []
     rigID = []
@@ -61,25 +85,22 @@ for mouseID,ephysDates in mouseInfo[:2]:
         falseAlarm = np.array(trials['response_type']=='FA')
         correctReject = np.array(trials['response_type']=='CR')
         
-        startFrame = int(trials['startframe'][0])
-        endFrame = int(trials['endframe'][hit.size-1])
-        winFrames = np.arange(int(startFrame+window),int(endFrame),int(interval))
-        hitProb = np.full(winFrames.size,np.nan)
-        hitRate = hitProb.copy()
-        falseAlarmProb = hitProb.copy()
-        for i,f in enumerate(winFrames):
-            h,m,fa,cr = [np.sum((trials['change_frame'][r & (~ignore)]>=f-window) & (trials['change_frame'][r & (~ignore)]<f)) for r in (hit,miss,falseAlarm,correctReject)]
-            hitRate[i] = h/window*frameRate
-            hitProb[i] = h/(h+m) if h>0 else 0
-            falseAlarmProb[i] = fa/(fa+cr) if fa>0 else 0
+        rewardsEarned[-1].append(hit.sum())
+        dprimeOverall[-1].append(calculateDprime(hit.sum(),miss.sum(),falseAlarm.sum(),correctReject.sum()))
         
-        rewardsEarned[-1].append(np.sum(hit & (~ignore)))
-        if np.any(hitRate>rewardThresh):
-            lastEngaged.append(interval/frameRate*(1+np.where(hitRate>rewardThresh)[0][-1]))
-            probEngaged.append(np.sum(hitRate>rewardThresh)/hitRate.size)
-        else:
-            lastEngaged.append(0)
-            probEngaged.append(0)
+        changeTimes = trials['change_time']
+        winDur = 60
+        winStarts = np.arange(0,int(np.nanmax(changeTimes)+1),winDur)
+        engagedWindows = np.zeros(winStarts.size,dtype=bool)
+        engagedTrials = np.zeros(trials.shape[0],dtype=bool)
+        for w,start in enumerate(winStarts):
+            winTrials = (changeTimes>start) & (changeTimes<start+winDur)
+            # mouse engaged if reward rate > 2/min
+            engaged = hit[winTrials].sum()>2
+            engagedWindows[w] = engaged
+            engagedTrials[winTrials] = engaged
+        dprimeEngaged[-1].append(calculateDprime(*(r[engagedTrials].sum() for r in (hit,miss,falseAlarm,correctReject))))
+        probEngaged[-1].append(engagedWindows.sum()/engagedWindows.size)
             
         trainingDate.append(datetime.datetime.strptime(os.path.basename(pklFile)[:6],'%y%m%d'))
         trainingStage.append(core_data['metadata']['stage'])
@@ -89,21 +110,24 @@ for mouseID,ephysDates in mouseInfo[:2]:
     isImages.append(np.array(['images' in s for s in trainingStage]))
     isRig.append(np.array(['NP' in r for r in rigID]))
     isEphys.append(np.array([d in ephysDateTimes for d in trainingDate]))
-    
+
+
+params = (rewardsEarned,dprimeEngaged,probEngaged)
+labels = ('Rewards Earned','d prime','prob. engaged')
+for ind,(mouseID,ephysDates) in enumerate(mouseInfo):     
     fig = plt.figure(facecolor='w')
-    params = (rewardsEarned[-1],)
-    for i,(prm,ymax,lbl) in enumerate(zip(params,(None,),('Rewards Earned',))):
+    for i,(prm,lbl,ymax) in enumerate(zip(params,labels,(None,None,None))):
         ax = plt.subplot(len(params),1,i+1)
-        for j,(d,p) in enumerate(zip(trainingDay[-1],prm)):
-            mec = 'r' if isEphys[-1][j] else 'k'
-            mfc = mec if isRig[-1][j] else 'none'
-            mrk = 'o' if isImages[-1][j] else 's'
+        for j,(d,p) in enumerate(zip(trainingDay[ind],prm[ind])):
+            mec = 'r' if isEphys[ind][j] else 'k'
+            mfc = mec if isRig[ind][j] else 'none'
+            mrk = 'o' if isImages[ind][j] else 's'
             ax.plot(d,p,mrk,mec=mec,mfc=mfc,ms=8)
         for side in ('right','top'):
             ax.spines[side].set_visible(False)
         ax.tick_params(direction='out',top=False,right=False,labelsize=12)
-        ax.set_xlim([0,max(trainingDay[-1])+1])
-        ylimMax = max(prm) if ymax is None else ymax
+        ax.set_xlim([0,max(trainingDay[ind])+1])
+        ylimMax = np.nanmax(prm[ind]) if ymax is None else ymax
         ax.set_ylim([0,1.05*ylimMax])
         ax.set_ylabel(lbl,fontsize=14)
         if i==0:
@@ -115,31 +139,69 @@ for mouseID,ephysDates in mouseInfo[:2]:
 
 labels = ('NSB','Rig1','RigLast','Ephys1','Ephys2')
 numRewards = []
-for day,rig,ephys,rewards in zip(trainingDay,isRig,isEphys,rewardsEarned):
+dpr = []
+engaged = []
+for day,rig,ephys,rewards,d,eng in zip(trainingDay,isRig,isEphys,rewardsEarned,dprimeEngaged,probEngaged):
     numRewards.append([])
+    dpr.append([])
+    engaged.append([])
     sortOrder = np.argsort(day)
-    rig,ephys,rewards = [np.array(a)[sortOrder] for a in (rig,ephys,rewards)]
+    rig,ephys,rewards,d,eng = [np.array(a)[sortOrder] for a in (rig,ephys,rewards,d,eng)]
     if not all(rig):
-        numRewards[-1].append(rewards[np.where(~rig)[0][-1]])
-        numRewards[-1].append(rewards[np.where(rig)[0][0]])
+        lastNSBDay = np.where(~rig)[0][-1]
+        numRewards[-1].append(rewards[lastNSBDay])
+        dpr[-1].append(d[lastNSBDay])
+        engaged[-1].append(eng[lastNSBDay])
+        firstRigDay = np.where(rig)[0][0]
+        numRewards[-1].append(rewards[firstRigDay])
+        dpr[-1].append(d[firstRigDay])
+        engaged[-1].append(eng[firstRigDay])
     else:
         numRewards[-1].extend([np.nan]*2)
+        dpr[-1].extend(([np.nan]*2))
+        engaged[-1].extend(([np.nan]*2))
     ephysInd = np.where(ephys)[0]
-    numRewards[-1].append(rewards[ephysInd[0]-1])
-    numRewards[-1].extend(rewards[ephysInd[:2]])
-    
+    lastNonEphysDay = ephysInd[0]-1
+    numRewards[-1].append(rewards[lastNonEphysDay])
+    dpr[-1].append(d[lastNonEphysDay])
+    engaged[-1].append(eng[lastNonEphysDay])    
+    ephysDays = ephysInd[:2]
+    numRewards[-1].extend(rewards[ephysDays])
+    dpr[-1].extend(d[ephysDays])
+    engaged[-1].extend(eng[ephysDays])
+    if len(ephysDays)<2:
+        numRewards[-1].append(np.nan)
+        dpr[-1].append(np.nan)
+        engaged[-1].append(np.nan)
+
+params = (numRewards,dpr,engaged)
+fig = plt.figure(facecolor='w')
+for i,(prm,ylab) in enumerate(zip(params,('Rewards Earned','d prime','prob. engaged'))): 
+    ax = plt.subplot(len(params),1,i+1)
+    for p,rig in zip(prm,isRig):
+        mkr = 'o' if not all(rig) else 's'
+        ax.plot(np.arange(len(p)),p,'k'+mkr+'-',mfc='none',ms=10)
+    for side in ('right','top'):
+        ax.spines[side].set_visible(False)
+    ax.tick_params(direction='out',top=False,right=False,labelsize=12)
+    ax.set_xlim([-0.25,4.25])
+    ax.set_ylim([0,1.05*np.nanmax(prm)])
+    ax.set_xticks(np.arange(len(labels)))
+    ax.set_xticklabels(labels)
+    ax.set_ylabel(ylab,fontsize=12)
     
 fig = plt.figure(facecolor='w')
-ax = plt.subplot(1,1,1)
-for r,rig in zip(numRewards,isRig):
-    mkr = 'o' if not all(rig) else 's'
-    ax.plot(np.arange(len(r)),r,'k'+mkr+'-',mfc='none',ms=10)
-for side in ('right','top'):
-    ax.spines[side].set_visible(False)
-ax.tick_params(direction='out',top=False,right=False,labelsize=12)
-ax.set_xlim([-0.25,4.25])
-ax.set_xticks(np.arange(len(labels)))
-ax.set_xticklabels(labels)
-ax.set_ylim([0,180])
-ax.set_ylabel('Rewards Earned',fontsize=12)
+for i,(prm,ylab) in enumerate(zip(params,('Rewards Earned','d prime','prob. engaged'))): 
+    ax = plt.subplot(len(params),1,i+1)
+    for p,rig in zip(prm,isRig):
+        if not all(rig):
+            ax.plot(np.arange(len(p)),p,'k'+mkr+'-',mfc='none',ms=10)
+    for side in ('right','top'):
+        ax.spines[side].set_visible(False)
+    ax.tick_params(direction='out',top=False,right=False,labelsize=12)
+    ax.set_xlim([-0.25,4.25])
+    ax.set_ylim([0,1.05*np.nanmax([i for p in prm for i in p])])
+    ax.set_xticks(np.arange(len(labels)))
+    ax.set_xticklabels(labels)
+    ax.set_ylabel(ylab,fontsize=12)
 
