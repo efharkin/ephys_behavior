@@ -141,7 +141,7 @@ for ind,(mouseID,ephysDates) in enumerate(mouseInfo):
     plt.tight_layout()
 
 
-labels = ('NSB','Rig1','RigLast','Ephys1','Ephys2')
+labels = ('NSB','Rig 1','Ephys -2','Ephys -1','Ephys 1','Ephys 2')
 numRewards = []
 dpr = []
 engaged = []
@@ -165,10 +165,10 @@ for day,rig,ephys,rewards,d,eng in zip(trainingDay,isRig,isEphys,rewardsEarned,d
         dpr[-1].extend(([np.nan]*2))
         engaged[-1].extend(([np.nan]*2))
     ephysInd = np.where(ephys)[0]
-    lastNonEphysDay = ephysInd[0]-1
-    numRewards[-1].append(rewards[lastNonEphysDay])
-    dpr[-1].append(d[lastNonEphysDay])
-    engaged[-1].append(eng[lastNonEphysDay])    
+    lastNonEphysDays = [ephysInd[0]-2,ephysInd[0]-1]
+    numRewards[-1].extend(rewards[lastNonEphysDays])
+    dpr[-1].extend(d[lastNonEphysDays])
+    engaged[-1].extend(eng[lastNonEphysDays])    
     ephysDays = ephysInd[:2]
     numRewards[-1].extend(rewards[ephysDays])
     dpr[-1].extend(d[ephysDays])
@@ -188,10 +188,15 @@ for i,(prm,ylab) in enumerate(zip(params,('Rewards Earned','d prime','prob. enga
     for side in ('right','top'):
         ax.spines[side].set_visible(False)
     ax.tick_params(direction='out',top=False,right=False,labelsize=12)
-    ax.set_xlim([-0.25,4.25])
-    ax.set_ylim([0,1.05*np.nanmax(prm)])
+    ax.set_xlim([-0.25,5.25])
+    ymax = 1.05*np.nanmax(prm)
+    ax.plot([3.5]*2,[0,ymax],'k--')
+    ax.set_ylim([0,ymax])
     ax.set_xticks(np.arange(len(labels)))
-    ax.set_xticklabels(labels)
+    if i==len(params)-1:
+        ax.set_xticklabels(labels)
+    else:
+        ax.set_xticklabels([])
     ax.set_ylabel(ylab,fontsize=12)
 
 fig = plt.figure(facecolor='w')
@@ -209,9 +214,14 @@ for i,(prm,ylab) in enumerate(zip(params,('Rewards Earned','d prime','prob. enga
     for side in ('right','top'):
         ax.spines[side].set_visible(False)
     ax.tick_params(direction='out',top=False,right=False,labelsize=12)
-    ax.set_xlim([-0.25,4.25])
-    ax.set_ylim([0,1.05*np.nanmax(meanPrm+stdPrm)])
+    ax.set_xlim([-0.25,5.25])
+    ymax = 1.05*np.nanmax(meanPrm+stdPrm)
+    ax.plot([3.5]*2,[0,ymax],'k--')
+    ax.set_ylim([0,ymax])
     ax.set_xticks(np.arange(len(labels)))
-    ax.set_xticklabels(labels)
+    if i==len(params)-1:
+        ax.set_xticklabels(labels)
+    else:
+        ax.set_xticklabels([])        
     ax.set_ylabel(ylab,fontsize=12)
 
