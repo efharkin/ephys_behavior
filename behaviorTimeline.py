@@ -44,6 +44,8 @@ mouseInfo = (('385533',('09072018','09102018','09112018','09172018')),
              ('416656',('03122019','03132019','03142019')),
              ('409096',('03212019',)),
              ('417882',('03262019','03272019')),
+             ('408528',('04042019','04052019')),
+             ('408527',('04102019','04112019')),
             )
 
 trainingDay = []
@@ -88,19 +90,21 @@ for mouseID,ephysDates in mouseInfo:
         rewardsEarned[-1].append(hit.sum())
         dprimeOverall[-1].append(calculateDprime(hit.sum(),miss.sum(),falseAlarm.sum(),correctReject.sum()))
         
-        changeTimes = trials['change_time']
-        winDur = 60
-        winStarts = np.arange(0,int(np.nanmax(changeTimes)+1),winDur)
-        engagedWindows = np.zeros(winStarts.size,dtype=bool)
-        engagedTrials = np.zeros(trials.shape[0],dtype=bool)
-        for w,start in enumerate(winStarts):
-            winTrials = (changeTimes>start) & (changeTimes<start+winDur)
-            # mouse engaged if reward rate > 2/min
-            engaged = hit[winTrials].sum()>2
-            engagedWindows[w] = engaged
-            engagedTrials[winTrials] = engaged
-        dprimeEngaged[-1].append(calculateDprime(*(r[engagedTrials].sum() for r in (hit,miss,falseAlarm,correctReject))))
-        probEngaged[-1].append(engagedWindows.sum()/engagedWindows.size)
+        startFrame = int(trials['startframe'][0])
+        endFrame = int(np.array(trials['endframe'])[-1])
+        changeFrames = np.array(trials['change_frame'])
+        hitFrames = np.zeros(endFrame,dtype=bool)
+        hitFrames[changeFrames[hit].astype(int)] = True
+        binSize = int(frameRate*60)
+        halfBin = int(binSize/2)
+        engagedThresh = 2
+        rewardRate = np.zeros(hitFrames.size,dtype=int)
+        rewardRate[halfBin:halfBin+hitFrames.size-binSize+1] = np.correlate(hitFrames,np.ones(binSize))
+        rewardRate[:halfBin] = rewardRate[halfBin]
+        rewardRate[-halfBin:] = rewardRate[-halfBin]
+        engagedTrials = rewardRate[changeFrames[~ignore].astype(int)]>engagedThresh
+        dprimeEngaged[-1].append(calculateDprime(*(r[~ignore][engagedTrials].sum() for r in (hit,miss,falseAlarm,correctReject))))
+        probEngaged[-1].append(np.sum(rewardRate>engagedThresh)/rewardRate.size)
             
         trainingDate.append(datetime.datetime.strptime(os.path.basename(pklFile)[:6],'%y%m%d'))
         trainingStage.append(core_data['metadata']['stage'])
@@ -180,7 +184,7 @@ for i,(prm,ylab) in enumerate(zip(params,('Rewards Earned','d prime','prob. enga
     ax = plt.subplot(len(params),1,i+1)
     for p,rig in zip(prm,isRig):
         mkr = 'o' if not all(rig) else 's'
-        ax.plot(np.arange(len(p)),p,'k'+mkr+'-',mfc='none',ms=10)
+        ax.plot(p,'k'+mkr+'-',mfc='none',ms=10)
     for side in ('right','top'):
         ax.spines[side].set_visible(False)
     ax.tick_params(direction='out',top=False,right=False,labelsize=12)
@@ -189,18 +193,24 @@ for i,(prm,ylab) in enumerate(zip(params,('Rewards Earned','d prime','prob. enga
     ax.set_xticks(np.arange(len(labels)))
     ax.set_xticklabels(labels)
     ax.set_ylabel(ylab,fontsize=12)
-    
+
 fig = plt.figure(facecolor='w')
-for i,(prm,ylab) in enumerate(zip(params,('Rewards Earned','d prime','prob. engaged'))): 
+for i,(prm,ylab) in enumerate(zip(params,('Rewards Earned','d prime','prob. engaged'))):
+    prm = np.array([p for p,rig in zip(prm,isRig) if not all(rig)])
+    meanPrm = np.nanmean(prm,axis=0)
+    n = np.sum(~np.isnan(prm),axis=0)
+    print(n)
+    stdPrm = np.nanstd(prm,axis=0)
+#    semPrm = stdPrm/n**0.5
     ax = plt.subplot(len(params),1,i+1)
-    for p,rig in zip(prm,isRig):
-        if not all(rig):
-            ax.plot(np.arange(len(p)),p,'k'+mkr+'-',mfc='none',ms=10)
+    ax.plot(meanPrm,'ko',mfc='none',ms=10)
+    for x,(m,s) in enumerate(zip(meanPrm,stdPrm)):
+        ax.plot([x]*2,m+np.array([-s,s]),'k')
     for side in ('right','top'):
         ax.spines[side].set_visible(False)
     ax.tick_params(direction='out',top=False,right=False,labelsize=12)
     ax.set_xlim([-0.25,4.25])
-    ax.set_ylim([0,1.05*np.nanmax([i for p in prm for i in p])])
+    ax.set_ylim([0,1.05*np.nanmax(meanPrm+stdPrm)])
     ax.set_xticks(np.arange(len(labels)))
     ax.set_xticklabels(labels)
     ax.set_ylabel(ylab,fontsize=12)
