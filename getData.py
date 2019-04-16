@@ -142,6 +142,11 @@ class behaviorEphys():
         self.correctReject = np.array(self.trials['response_type']=='CR')
         self.initialImage = np.array(self.trials['initial_image_name'])
         self.changeImage = np.array(self.trials['change_image_name'])
+        candidateOmittedFlashFrames = behaviordata['items']['behavior']['stimuli']['images']['flashes_omitted']
+        drawlog = behaviordata['items']['behavior']['stimuli']['images']['draw_log']
+        self.omittedFlashFrames = np.array([c for c in candidateOmittedFlashFrames if not drawlog[c]])
+        imageFrameIndexBeforeOmitted = np.searchsorted(self.core_data['visual_stimuli']['frame'], self.omittedFlashFrames)-1
+        self.omittedFlashImage = np.array(self.core_data['visual_stimuli']['image_name'])[imageFrameIndexBeforeOmitted]
         
         self.behaviorStimDur = np.array(self.core_data['visual_stimuli']['duration'])
         self.preGrayDur = np.stack(self.trials['blank_duration_range']) # where is actual gray dur
