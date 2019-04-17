@@ -178,9 +178,10 @@ for day,rig,ephys,rewards,d,eng in zip(trainingDay,isRig,isEphys,rewardsEarned,d
         dpr[-1].append(np.nan)
         engaged[-1].append(np.nan)
 
-params = (numRewards,dpr,engaged)
+params = (numRewards,engaged,dpr)
+paramNames = ('Rewards Earned','Prob. Engaged','d prime')
 fig = plt.figure(facecolor='w')
-for i,(prm,ylab) in enumerate(zip(params,('Rewards Earned','d prime','prob. engaged'))): 
+for i,(prm,ylab) in enumerate(zip(params,paramNames)): 
     ax = plt.subplot(len(params),1,i+1)
     for p,rig in zip(prm,isRig):
         mkr = 'o' if not all(rig) else 's'
@@ -199,29 +200,40 @@ for i,(prm,ylab) in enumerate(zip(params,('Rewards Earned','d prime','prob. enga
         ax.set_xticklabels([])
     ax.set_ylabel(ylab,fontsize=12)
 
+show = slice(2,6)
 fig = plt.figure(facecolor='w')
-for i,(prm,ylab) in enumerate(zip(params,('Rewards Earned','d prime','prob. engaged'))):
+for i,(prm,ylab,ylim) in enumerate(zip(params,paramNames,([0,250],[0,1],[0,3]))):
+    ax = plt.subplot(len(params),1,i+1)
+    ymax = 0
+    for p,rig in zip(prm,isRig):
+        if not all(rig):
+            ax.plot(p[show],'o-',color='0.8',mec='0.8',ms=2)
+            ymax = max(ymax,max(p[show]))
     prm = np.array([p for p,rig in zip(prm,isRig) if not all(rig)])
     meanPrm = np.nanmean(prm,axis=0)
     n = np.sum(~np.isnan(prm),axis=0)
     print(n)
     stdPrm = np.nanstd(prm,axis=0)
-#    semPrm = stdPrm/n**0.5
-    ax = plt.subplot(len(params),1,i+1)
-    ax.plot(meanPrm,'ko',mfc='none',ms=10)
-    for x,(m,s) in enumerate(zip(meanPrm,stdPrm)):
-        ax.plot([x]*2,m+np.array([-s,s]),'k')
+    semPrm = stdPrm/n**0.5
+    ax.plot(meanPrm[show],'o',mfc='k',mec='k',ms=8)
+    for x,(m,s) in enumerate(zip(meanPrm[show],semPrm[show])):
+        ax.plot([x]*2,m+np.array([-s,s]),'k',linewidth=2)
     for side in ('right','top'):
         ax.spines[side].set_visible(False)
     ax.tick_params(direction='out',top=False,right=False,labelsize=12)
-    ax.set_xlim([-0.25,5.25])
-    ymax = 1.05*np.nanmax(meanPrm+stdPrm)
-    ax.plot([3.5]*2,[0,ymax],'k--')
+    ax.set_xlim([-0.25,show.stop-show.start-0.75])
+    ymax = 1.05*max(ymax,np.nanmax((meanPrm+stdPrm)[show])) if ylim is None else ylim[1]
+    ax.plot([(show.stop-show.start)//2-0.5]*2,[0,ymax],'k--')
     ax.set_ylim([0,ymax])
-    ax.set_xticks(np.arange(len(labels)))
+    ax.set_xticks(np.arange(len(labels[show])))
     if i==len(params)-1:
-        ax.set_xticklabels(labels)
+        ax.set_xticklabels([-2,-1,1,2])
+        ax.set_xlabel('Day',fontsize=12)
     else:
-        ax.set_xticklabels([])        
+        ax.set_xticklabels([])
     ax.set_ylabel(ylab,fontsize=12)
+    ax.yaxis.set_label_coords(-0.075,0.5)
+    ax.locator_params(axis='y',nbins=3)
+fig.text(0.33,0.95,'Training',fontsize=14,horizontalalignment='center')
+fig.text(0.7,0.95,'Ephys',fontsize=14,horizontalalignment='center')
 
