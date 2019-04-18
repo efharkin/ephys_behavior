@@ -22,19 +22,25 @@ import scipy
 from analysis_utils import find_run_transitions
 
 #Parent directory with sorted data, sync and pkl files
-dataDir = 'Z:\\03132019_416656'
+dataDir = 'Z:\\03262019_417882'
 
 #Which probes to run through analysis
-probeIDs = ['A', 'B', 'C', 'D', 'E', 'F']
-probePXIDict = {'A': 'slot2-probe1', 'B': 'slot2-probe2', 'C': 'slot2-probe3', 'D': 'slot3-probe1', 'E': 'slot3-probe2', 'F': 'slot3-probe4'}
+probeIDs = ['A', 'B', 'C', 'E', 'F']
+probePXIDict = {'A': 'slot2-probe1', 'B': 'slot2-probe2', 'C': 'slot2-probe3', 'D': 'slot3-probe1', 'E': 'slot3-probe2', 'F': 'slot3-probe3'}
 
 class behaviorEphys():
     
-    def __init__(self):
-        self.dataDir = dataDir
-        self.sync_file = glob.glob(os.path.join(dataDir, '*.h5'))[0]
+    def __init__(self, baseDir=None, probes=None):
+        if baseDir is None:        
+            self.dataDir = dataDir
+        else:
+            self.dataDir = baseDir
+        self.sync_file = glob.glob(os.path.join(self.dataDir, '*.h5'))[0]
         self.syncDataset = sync.Dataset(self.sync_file)
-        self.probes_to_analyze = probeIDs
+        if probes is None:
+            self.probes_to_analyze = probeIDs
+        else:
+            self.probes_to_analyze = probes
         self.PXIDict = probePXIDict
         
     def saveHDF5(self,filePath=None):
