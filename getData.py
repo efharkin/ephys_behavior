@@ -22,7 +22,7 @@ import scipy
 from analysis_utils import find_run_transitions
 
 #Parent directory with sorted data, sync and pkl files
-dataDir = 'Z:\\03132019_416656'
+dataDir = 'Z:\\04042019_408528'
 
 #Which probes to run through analysis
 probeIDs = ['A', 'B', 'C', 'D', 'E', 'F']
