@@ -236,9 +236,9 @@ def plot_rf(obj, spikes, axes=None, resp_latency=0.05):
     ori = np.unique(trial_ori)
     
     #get first frame for this stimulus (first frame after end of behavior session)
-    first_rf_frame = obj.trials['endframe'].values[-1] + obj.rf_pre_blank_frames + 1
-    rf_frameTimes = obj.frameAppearTimes[first_rf_frame:]
-    rf_trial_start_times = rf_frameTimes[np.array([f[0] for f in sweep_frames]).astype(np.int)]
+    first_rf_frame = obj.first_rf_frame
+    rf_frameTimes = obj.rf_frameTimes
+    rf_trial_start_times = obj.rf_trial_start_times
     
     trial_spikes = analysis_utils.find_spikes_per_trial(spikes, rf_trial_start_times+resp_latency, rf_trial_start_times+resp_latency+0.2)
     respMat = np.zeros([ypos.size, xpos.size, ori.size])
@@ -389,6 +389,7 @@ def plot_psth_hits_vs_misses(obj, spikes, axes=None, preTime=1.55, postTime=4.5,
 def plot_spike_amplitudes(obj, pid, uid, axis):
     units = obj.units
     frameTimes = obj.frameAppearTimes
+    last_behavior_time = obj.lastBehaviorTime  
     
     
     spikes = units[pid][uid]['times']
@@ -402,7 +403,6 @@ def plot_spike_amplitudes(obj, pid, uid, axis):
         
     axis.plot(amplitudes[::num_spikes_to_skip], frameTimes[-1] - spikes[::num_spikes_to_skip], 'ko', alpha=0.2)
     
-    last_behavior_time = frameTimes[obj.trials['endframe'].values[-1]]    
     
     axis.set_ylim([0, int(frameTimes[-1])])
     axis.set_yticks([0, int(frameTimes[-1])])
