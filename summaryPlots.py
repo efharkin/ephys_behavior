@@ -469,7 +469,7 @@ def plot_spike_template(obj, pid, uid, gs=None):
     # Define the edges of the bins (including rightmost bin)
     b = np.linspace(-width, width, 2 * n_b+1, endpoint=True)
     [h, hb] = np.histogram(d, bins=b)
-    h[np.ceil(len(h)/2).astype(int) - 1] = 0
+    h[np.ceil(len(h)/2).astype(int)] = 0
                     
     acgax = plt.subplot(gs[2,1])
     acgax.bar(hb[:-1], h, bin_width)
