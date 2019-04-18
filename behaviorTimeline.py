@@ -17,18 +17,21 @@ from visual_behavior.translator.foraging2 import data_to_change_detection_core
 from visual_behavior.translator.core import create_extended_dataframe
 
 
-def calculateHitRate(hits,misses):
+def calculateHitRate(hits,misses,adjusted=False):
     n = hits+misses
+    if n==0:
+        return np.nan
     hitRate = hits/n
-    if hitRate==0:
-        hitRate = 0.5/n
-    elif hitRate==1:
-        hitRate = 1-0.5/n
+    if adjusted:
+        if hitRate==0:
+            hitRate = 0.5/n
+        elif hitRate==1:
+            hitRate = 1-0.5/n
     return hitRate
 
 def calculateDprime(hits,misses,falseAlarms,correctRejects):
-    hitRate = calculateHitRate(hits,misses)
-    falseAlarmRate = calculateHitRate(falseAlarms,correctRejects)
+    hitRate = calculateHitRate(hits,misses,adjusted=True)
+    falseAlarmRate = calculateHitRate(falseAlarms,correctRejects,adjusted=True)
     z = [scipy.stats.norm.ppf(r) for r in (hitRate,falseAlarmRate)]
     return z[0]-z[1]
 
@@ -56,17 +59,21 @@ rewardsEarned = []
 dprimeOverall = []
 dprimeEngaged = []
 probEngaged = []
+imageHitRate = []
+imageHitRateEngaged = []
 frameRate = 60.0
 windowFrames = 60*frameRate
 for mouseID,ephysDates in mouseInfo: 
     ephysDateTimes = [datetime.datetime.strptime(d,'%m%d%Y') for d in ephysDates] if ephysDates is not None else (None,)
+    trainingDate = []
+    trainingStage = []
+    rigID = []
     rewardsEarned.append([])
     dprimeOverall.append([])
     dprimeEngaged.append([])
     probEngaged.append([])
-    trainingDate = []
-    trainingStage = []
-    rigID = []
+    imageHitRate.append([])
+    imageHitRateEngaged.append([])
     for pklFile in  glob.glob(os.path.join(pickleDir,mouseID,'*.pkl')):
         try:
             core_data = data_to_change_detection_core(pd.read_pickle(pklFile))
@@ -78,6 +85,10 @@ for mouseID,ephysDates in mouseInfo:
         except:
             print('could not import '+pklFile)
             continue
+        
+        trainingDate.append(datetime.datetime.strptime(os.path.basename(pklFile)[:6],'%y%m%d'))
+        trainingStage.append(core_data['metadata']['stage'])
+        rigID.append(core_data['metadata']['rig_id'])
         
         autoRewarded = np.array(trials['auto_rewarded']).astype(bool)
         earlyResponse = np.array(trials['response_type']=='EARLY_RESPONSE')
@@ -102,14 +113,21 @@ for mouseID,ephysDates in mouseInfo:
         rewardRate[halfBin:halfBin+hitFrames.size-binSize+1] = np.correlate(hitFrames,np.ones(binSize))
         rewardRate[:halfBin] = rewardRate[halfBin]
         rewardRate[-halfBin:] = rewardRate[-halfBin]
+        probEngaged[-1].append(np.sum(rewardRate>engagedThresh)/rewardRate.size)
         engagedTrials = rewardRate[changeFrames[~ignore].astype(int)]>engagedThresh
         dprimeEngaged[-1].append(calculateDprime(*(r[~ignore][engagedTrials].sum() for r in (hit,miss,falseAlarm,correctReject))))
-        probEngaged[-1].append(np.sum(rewardRate>engagedThresh)/rewardRate.size)
-            
-        trainingDate.append(datetime.datetime.strptime(os.path.basename(pklFile)[:6],'%y%m%d'))
-        trainingStage.append(core_data['metadata']['stage'])
-        rigID.append(core_data['metadata']['rig_id'])
         
+        imageNames = [i['image_name'] for i in core_data['image_set']['image_attributes']]
+        changeImage = np.array(trials['change_image_name'])
+        imageHitRate[-1].append([])
+        imageHitRateEngaged[-1].append([])
+        for img in imageNames:
+            imgTrials = changeImage==img
+            ind = imgTrials & (~ignore)
+            imageHitRate[-1][-1].append(calculateHitRate(hit[ind].sum(),miss[ind].sum()))
+            engaged = rewardRate[changeFrames[ind].astype(int)]>engagedThresh
+            imageHitRateEngaged[-1][-1].append(calculateHitRate(hit[ind][engaged].sum(),miss[ind][engaged].sum()))
+             
     trainingDay.append(np.array([(d-min(trainingDate)).days+1 for d in trainingDate]))
     isImages.append(np.array(['images' in s for s in trainingStage]))
     isRig.append(np.array(['NP' in r for r in rigID]))
@@ -236,4 +254,23 @@ for i,(prm,ylab,ylim) in enumerate(zip(params,paramNames,([0,250],[0,1],[0,3])))
     ax.locator_params(axis='y',nbins=3)
 fig.text(0.33,0.95,'Training',fontsize=14,horizontalalignment='center')
 fig.text(0.7,0.95,'Ephys',fontsize=14,horizontalalignment='center')
+
+
+meanImageHitRate = []
+for m,day in zip(imageHitRateEngaged,trainingDay):
+    fig = plt.figure(facecolor='w')
+    ax = plt.subplot(1,1,1)
+    sortOrder = np.argsort(day)
+    h = np.array([m[i] for i in sortOrder if len(m[i])>0])
+    meanImageHitRate.append(h[-4:].mean(axis=0))
+    ax.imshow(h,clim=(0,1),cmap='gray',interpolation='none')
+    for side in ('right','top'):
+        ax.spines[side].set_visible(False)
+    ax.tick_params(direction='out',top=False,right=False,labelsize=12)
+    ax.set_xlabel('image')
+    ax.set_ylabel('day')
+    
+    
+    
+plt.imshow(np.array(meanImageHitRate)[3:],clim=(0,1),cmap='gray',interpolation='none')
 
