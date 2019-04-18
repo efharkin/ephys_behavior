@@ -138,20 +138,40 @@ def plot_unit_summary(obj, pid, uid, multipageObj=None):
         figtitle += ' , ' + units[pid][uid]['ccfRegion']
     fig.suptitle(figtitle,fontsize=14)
     
-    gs = gridspec.GridSpec(9, 8)
-    gs.update(top=0.95, bottom = 0.05, left=0.05, right=0.95, wspace=0.3)
+    if len(obj.omittedFlashFrames)==0:
+        gs = gridspec.GridSpec(9, 8)
+        gs.update(top=0.95, bottom = 0.05, left=0.05, right=0.95, wspace=0.3)
+        
+        imgAxes = [plt.subplot(gs[i,0]) for i in range(8)]
+        plot_images(obj, imgAxes)
+        
+        rfAxes = [plt.subplot(gs[i,1]) for i in range(9)]
+        plot_rf(obj, spikes, rfAxes, resp_latency=0.05)
+            
+        allflashax = [plt.subplot(gs[i,2:4]) for i in range(9)]
+        plot_psth_all_flashes(obj, spikes, allflashax)
+        
+        hitmissax = [plt.subplot(gs[i,4:]) for i in range(9)]
+        plot_psth_hits_vs_misses(obj, spikes, hitmissax)
     
-    imgAxes = [plt.subplot(gs[i,0]) for i in range(8)]
-    plot_images(obj, imgAxes)
-    
-    rfAxes = [plt.subplot(gs[i,1]) for i in range(9)]
-    plot_rf(obj, spikes, rfAxes, resp_latency=0.05)
-    
-    allflashax = [plt.subplot(gs[i,2:4]) for i in range(8)]
-    plot_psth_all_flashes(obj, spikes, allflashax)
-    
-    hitmissax = [plt.subplot(gs[i,4:]) for i in range(8)]
-    plot_psth_hits_vs_misses(obj, spikes, hitmissax)
+    else:
+        gs = gridspec.GridSpec(9, 10)
+        gs.update(top=0.95, bottom = 0.05, left=0.05, right=0.95, wspace=0.3)
+        
+        imgAxes = [plt.subplot(gs[i,0]) for i in range(8)]
+        plot_images(obj, imgAxes)
+        
+        rfAxes = [plt.subplot(gs[i,1]) for i in range(9)]
+        plot_rf(obj, spikes, rfAxes, resp_latency=0.05)
+            
+        allflashax = [plt.subplot(gs[i,2:4]) for i in range(9)]
+        plot_psth_all_flashes(obj, spikes, allflashax)
+        
+        omittedflashax = [plt.subplot(gs[i,4:6]) for i in range(9)]
+        plot_psth_omitted_flashes(obj, spikes, omittedflashax)        
+        
+        hitmissax = [plt.subplot(gs[i,6:]) for i in range(9)]
+        plot_psth_hits_vs_misses(obj, spikes, hitmissax)
     
     if multipageObj is not None:
         fig.savefig(multipageObj, format='pdf')
@@ -264,6 +284,12 @@ def plot_psth_all_flashes(obj, spikes, axes=None, preTime = 0.05, postTime = 0.5
         latency = analysis_utils.find_latency(sdf[:int(1000*(preTime+0.25+0.05))], int(preTime*1000), 5)
         latencies.append(latency)
         sdfs.append(sdf)
+    
+    #plot mean response to all flashes at end
+    allsdf, t = analysis_utils.getSDF(spikes,image_flash_times-preTime,preTime+postTime, sigma=sdfSigma)
+    latency = analysis_utils.find_latency(allsdf[:int(1000*(preTime+0.25+0.05))], int(preTime*1000), 5)
+    latencies.append(latency)
+    sdfs.append(allsdf)
         
     ymax = round(max([s.max() for s in sdfs])+0.5)
     for ax,sdf,lat in zip(axes,sdfs,latencies):
@@ -283,7 +309,45 @@ def plot_psth_all_flashes(obj, spikes, axes=None, preTime = 0.05, postTime = 0.5
             ax.set_xticklabels([])
     axes[-1].set_xlabel('Time to flash (s)',fontsize=12)
 
-
+def plot_psth_omitted_flashes(obj, spikes, axes=None, preTime = 0.05, postTime = 0.55, sdfSigma=0.005):
+    image_flash_times = obj.frameAppearTimes[obj.omittedFlashFrames]
+    image_id = np.array(obj.omittedFlashImage)
+    
+    sdfs = []
+    latencies = []
+    for i,img in enumerate(obj.imageNames):
+        this_image_times = image_flash_times[image_id==img]
+        sdf, t = analysis_utils.getSDF(spikes,this_image_times-preTime,preTime+postTime, sigma=sdfSigma)
+        latency = analysis_utils.find_latency(sdf[:int(1000*(preTime+0.25+0.05))], int(preTime*1000), 5)
+        latencies.append(latency)
+        sdfs.append(sdf)
+    
+    #plot mean response to all flashes at end
+    allsdf, t = analysis_utils.getSDF(spikes,image_flash_times-preTime,preTime+postTime, sigma=sdfSigma)
+    latency = analysis_utils.find_latency(allsdf[:int(1000*(preTime+0.25+0.05))], int(preTime*1000), 5)
+    latencies.append(latency)
+    sdfs.append(allsdf)
+    
+    ymax = round(max([s.max() for s in sdfs])+0.5)
+    for ax,sdf,lat in zip(axes,sdfs,latencies):
+        ax.add_patch(patches.Rectangle([0,0],width=obj.behaviorStimDur.mean(),height=ymax,color='0.9',alpha=0.5))
+        ax.plot(t-preTime, sdf, 'k')
+        if not np.isnan(lat):
+            ax.plot(lat/1000-preTime, sdf[lat], 'ro')
+        for side in ('right','top'):
+            ax.spines[side].set_visible(False)
+        ax.tick_params(direction='out',top=False,right=False,labelsize=10)
+        ax.set_ylim([0, ymax])
+        ax.set_xlim([-preTime,postTime])
+        ax.set_yticks([0,ymax])
+        if ax is not axes[0]:
+            ax.set_yticklabels([])
+        if ax is not axes[-1]:
+            ax.set_xticklabels([])
+    axes[-1].set_xlabel('Time to omitted flash (s)',fontsize=12)
+    
+    
+    
 def plot_psth_hits_vs_misses(obj, spikes, axes=None, preTime=1.55, postTime=4.5, sdfSigma=0.02):
     hitSDFs = []
     missSDFs = []
@@ -293,6 +357,12 @@ def plot_psth_hits_vs_misses(obj, spikes, axes=None, preTime=1.55, postTime=4.5,
             changeTimes = obj.frameAppearTimes[np.array(obj.trials['change_frame'][selectedTrials]).astype(int)]
             sdf,t = analysis_utils.getSDF(spikes,changeTimes-preTime,preTime+postTime,sigma=sdfSigma)
             s.append(sdf)
+        
+        #plot mean across images at end
+        selectedTrials = resp & (~obj.ignore)
+        changeTimes = obj.frameAppearTimes[np.array(obj.trials['change_frame'][selectedTrials]).astype(int)]
+        sdf,t = analysis_utils.getSDF(spikes,changeTimes-preTime,preTime+postTime,sigma=sdfSigma) 
+        s.append(sdf)
     
     ymax = round(max([max(h.max(),m.max()) for h,m in zip(hitSDFs,missSDFs)])+0.5)
     stimdur = obj.behaviorStimDur.mean()
@@ -319,6 +389,7 @@ def plot_psth_hits_vs_misses(obj, spikes, axes=None, preTime=1.55, postTime=4.5,
 def plot_spike_amplitudes(obj, pid, uid, axis):
     units = obj.units
     frameTimes = obj.frameAppearTimes
+    
     
     spikes = units[pid][uid]['times']
     amplitudes = units[pid][uid]['amplitudes']    
@@ -396,7 +467,7 @@ def plot_spike_template(obj, pid, uid, gs=None):
         
     n_b = int( np.ceil(width / bin_width) )  # Num. edges per side
     # Define the edges of the bins (including rightmost bin)
-    b = np.linspace(-width, width, 2 * n_b, endpoint=True)
+    b = np.linspace(-width, width, 2 * n_b+1, endpoint=True)
     [h, hb] = np.histogram(d, bins=b)
     h[np.ceil(len(h)/2).astype(int) - 1] = 0
                     
@@ -445,7 +516,7 @@ def plot_lick_triggered_fr(obj, spikes, axis, min_inter_lick_time = 0.5, preTime
     
 def plot_run_triggered_fr(obj, spikes, axis, preTime=1, postTime=2):      
     if len(obj.behaviorRunStartTimes)>0:
-        run_psth, t = analysis_utils.getSDF(spikes,obj.run_start_times-preTime,preTime+postTime)
+        run_psth, t = analysis_utils.getSDF(spikes,obj.behaviorRunStartTimes-preTime,preTime+postTime)
         axis.plot(t-1,run_psth, 'k')
         axis.plot([0,0], axis.get_ylim(), 'k--')
         formatFigure(plt.gcf(), axis, xLabel='Time to run (s)', yLabel='Run-Trig. FR (Hz)')

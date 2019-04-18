@@ -102,7 +102,8 @@ def load_spike_info(spike_data_dir, p_sampleRate, shift):
                 averaged over 1000 randomly chosen spikes
             'peakChan': channel where spike template has minimum, used to approximate unit location
     '''
-    
+    print(p_sampleRate)
+    print(shift)
     spike_clusters = np.load(os.path.join(spike_data_dir, 'spike_clusters.npy'))
     spike_times = np.load(os.path.join(spike_data_dir, 'spike_times.npy'))
     try:

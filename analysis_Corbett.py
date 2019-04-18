@@ -54,7 +54,7 @@ def plot_psth_all_flashes(spikes, frameTimes, core_data, axis, preTime = 0.1, po
        
 def make_psth_all_flashes(spikes, frameTimes, core_data, preTime = 0.1, postTime = 0.5, sdfSigma=0.005):
     image_flash_times = frameTimes[np.array(core_data['visual_stimuli']['frame'])]
-    image_id = np.array(core_data['visual_stimuli']['image_name'])
+    image_id = np.array(obj.core_data['visual_stimuli']['image_name'])
     imageNames = np.unique(image_id)
     
     sdfs = []
@@ -944,6 +944,14 @@ for r, label in zip(rs.T, labels):
 
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.model_selection import train_test_split
+obj = b
+ignore = obj.ignore
+frameTimes = obj.frameAppearTimes
+trials = obj.trials
+units = obj.units
+probes_to_run = ['C']
+
+selectOnRegion = False
 
 clf = RandomForestClassifier(1000, min_samples_split=5)
 
@@ -953,34 +961,34 @@ changeTimes = frameTimes[np.array(trials['change_frame'][selectedTrials]).astype
 changeImages = np.array(trials['change_image_name'][selectedTrials])
 initialImages = np.array(trials['initial_image_name'][selectedTrials])
 
-preTime = 1
-postTime = 1
-all_sdfs = []
-uid = []
-for pid in probes_to_run:
-    for u in probeSync.getOrderedUnits(units[pid]):
-        region = units[pid][u]['ccfRegion']
-        if region is not None and any([r in region for r in regionsToConsider]):
-            spikes = units[pid][u]['times']
-            uid.append(pid+str(u))
-            sdfs,t = getSDF(spikes,changeTimes-preTime,preTime+postTime,sigma=0.02,sampInt=0.001,avg=False)
-            if len(all_sdfs) == 0:
-                all_sdfs = np.copy(sdfs)
-                
-            else:
-                all_sdfs = np.hstack([all_sdfs, sdfs])
-
-
-
-clf.fit(all_sdfs, changeImages)
-f_importance_miss = clf.feature_importances_
-
-plt.figure()
-plt.plot(np.mean(np.reshape(f_importance_miss, [59, -1]), 0))
-
-for i, fi in enumerate(np.reshape(f_importance_miss, [59, -1])):
-    plt.figure(uid[i])
-    plt.plot(fi)
+#preTime = 1
+#postTime = 1
+#all_sdfs = []
+#uid = []
+#for pid in probes_to_run:
+#    for u in probeSync.getOrderedUnits(units[pid]):
+#        region = units[pid][u]['ccfRegion']
+#        if not selectOnRegion or (region is not None and any([r in region for r in regionsToConsider])):
+#            spikes = units[pid][u]['times']
+#            uid.append(pid+str(u))
+#            sdfs,t = getSDF(spikes,changeTimes-preTime,preTime+postTime,sigma=0.02,sampInt=0.001,avg=False)
+#            if len(all_sdfs) == 0:
+#                all_sdfs = np.copy(sdfs)
+#                
+#            else:
+#                all_sdfs = np.hstack([all_sdfs, sdfs])
+#
+#
+#
+#clf.fit(all_sdfs, changeImages)
+#f_importance_miss = clf.feature_importances_
+#
+#plt.figure()
+#plt.plot(np.mean(np.reshape(f_importance_miss, [59, -1]), 0))
+#
+#for i, fi in enumerate(np.reshape(f_importance_miss, [59, -1])):
+#    plt.figure(uid[i])
+#    plt.plot(fi)
     
 
 # same as above using psths not sdfs
@@ -992,10 +1000,10 @@ baselines = []
 for pid in probes_to_run:
     for u in probeSync.getOrderedUnits(units[pid]):
         region = units[pid][u]['ccfRegion']
-        if region is not None and any([r in region for r in regionsToConsider]):
+        if not selectOnRegion or (region is not None and any([r in region for r in regionsToConsider])):
             spikes = units[pid][u]['times']
             uid.append(pid+str(u))
-            psth = makePSTH(spikes, changeTimes-preTime, preTime+postTime, binSize=0.001, avg=False)
+            psth = makePSTH(spikes, changeTimes-preTime, preTime+postTime, binSize=0.01, avg=False)
             if len(all_psths) == 0:
                 all_psths = np.copy(psth)
 #                baselines = np.copy(psth[:, 530:550])
@@ -1013,9 +1021,9 @@ f_psth_importance = clf.feature_importances_
 plt.figure()
 plt.plot(np.mean(np.reshape(f_psth_importance, [len(uid), -1]), 0))
 
-for i, fi in enumerate(np.reshape(f_psth_importance, [len(uid), -1])):
-    plt.figure(uid[i])
-    plt.plot(fi)
+#for i, fi in enumerate(np.reshape(f_psth_importance, [len(uid), -1])):
+#    plt.figure(uid[i])
+#    plt.plot(fi)
 
 
 # classify on several postTime intervals to "simulate" cortical silencing experiment
@@ -1031,7 +1039,7 @@ for postTime in np.arange(startTime, endTime, timeStep):
     for pid in probes_to_run:
         for u in probeSync.getOrderedUnits(units[pid]):
             region = units[pid][u]['ccfRegion']
-            if region is not None and any([r in region for r in regionsToConsider]):
+            if not selectOnRegion or (region is not None and any([r in region for r in regionsToConsider])):
                 spikes = units[pid][u]['times']
                 uid.append(pid+str(u))
                 psth = makePSTH(spikes, changeTimes-preTime, preTime+postTime, binSize=0.01, avg=False)
@@ -1043,7 +1051,7 @@ for postTime in np.arange(startTime, endTime, timeStep):
                     all_psths = np.hstack([all_psths, psth])
                     baselines = np.hstack([baselines, psth[:, 300:320]])
     
-    psth_train, psth_test, image_train, image_test = train_test_split(all_psths, changeImages, test_size=0.5)
+    psth_train, psth_test, image_train, image_test = train_test_split(all_psths, changeImages, test_size=0.2)
     clf.fit(psth_train, image_train)
     scores.append(clf.score(psth_test, image_test))
     
@@ -1128,6 +1136,8 @@ ax.hist()
 ######Correlate pop response to hit rate##########
 
 #get hit rates for each image
+hit = obj.hit
+miss = obj.miss
 changeCounts = []
 initialCounts = []
 for ir, respType in enumerate((hit, miss)):
@@ -1135,8 +1145,8 @@ for ir, respType in enumerate((hit, miss)):
     changeImages = np.array(trials['change_image_name'][selectedTrials])
     initialImages = np.array(trials['initial_image_name'][selectedTrials])
 
-    changeCounts.append([np.sum(changeImages==im) for im in np.unique(changeImages)])
-    initialCounts.append([np.sum(initialImages==im) for im in np.unique(initialImages)])
+    changeCounts.append([np.sum(changeImages==im) for im in np.unique(trials['change_image_name'])])
+    initialCounts.append([np.sum(initialImages==im) for im in np.unique(trials['change_image_name'])])
 
 changeCounts = np.array(changeCounts)
 initialCounts = np.array(initialCounts)
@@ -1149,6 +1159,7 @@ change_image_hit_rates = changeCounts[0]/changeTotals
 
 #calculate pop response to each image
 regionsToConsider = ['VIS', 'cc']
+probes_to_run = ['C']
 uid = []
 image_sdfs = []   
 preTime = 0.1
@@ -1158,10 +1169,10 @@ if allFlashes:
     for pid in probes_to_run:
         for u in probeSync.getOrderedUnits(units[pid]):
             region = units[pid][u]['ccfRegion']
-            if region is not None and any([r in region for r in regionsToConsider]):
+            if not selectOnRegion or (region is not None and any([r in region for r in regionsToConsider])):
                 spikes = units[pid][u]['times']
                 uid.append(pid+str(u))
-                sdfs, time = make_psth_all_flashes(spikes, frameTimes, core_data, preTime = preTime, postTime = postTime, sdfSigma=0.005)
+                sdfs, time = make_psth_all_flashes(spikes, frameTimes, obj.core_data, preTime = preTime, postTime = postTime, sdfSigma=0.005)
                 image_sdfs.append(sdfs)
                 
     meanImageResps = np.mean(image_sdfs, 0)            
@@ -1173,7 +1184,7 @@ else:
     for pid in probes_to_run:
         for u in probeSync.getOrderedUnits(units[pid]):
             region = units[pid][u]['ccfRegion']
-            if region is not None and any([r in region for r in regionsToConsider]):
+            if not selectOnRegion or (region is not None and any([r in region for r in regionsToConsider])):
                 spikes = units[pid][u]['times']
                 uid.append(pid+str(u))
                 unit_sdf = []
@@ -1190,17 +1201,17 @@ fig, ax = plt.subplots()
 fig_in, ax_in = plt.subplots()
 for i, (s, l) in enumerate(zip(meanImageResps, latency.astype(np.int) + int(1000*preTime))):
     ax.plot(s[100:200])
-    ax.plot(l-100, s[100:200][l-100], 'ro')    
+    #ax.plot(l-100, s[100:200][l-100], 'ro')    
     ax.set_ylim([0, 30])
     
     ax_in.plot(s)
-    ax_in.plot(l, s[l], 'ro')    
+    #ax_in.plot(l, s[l], 'ro')    
     ax_in.set_ylim([0, 30])
     
 
 
 #plot correlation between pop response and hit rate
-early_response = np.mean(meanImageResps[:, 130:160], 1)
+early_response = np.mean(meanImageResps[:, 125:200], 1)
 full_response = np.mean(meanImageResps[:, 130:400], 1)
 
 fig, ax = plt.subplots()
@@ -1225,11 +1236,67 @@ for tp in np.arange(meanImageResps.shape[1]):
 
 
 
+#calculate pop response for each probe
+probes_to_run = ['A', 'B', 'C', 'E', 'F']
+uid = []
+image_sdfs = []   
+preTime = 1
+postTime = 1
+allFlashes = False  #if True pop response will be calculated using all flashes of stimulus, if false only change flashes will be used
+meanProbeResponse = []
+for pid in probes_to_run:
+    if allFlashes:
+        for u in probeSync.getOrderedUnits(units[pid]):
+            region = units[pid][u]['ccfRegion']
+            if not selectOnRegion or (region is not None and any([r in region for r in regionsToConsider])):
+                spikes = units[pid][u]['times']
+                uid.append(pid+str(u))
+                sdfs, time = make_psth_all_flashes(spikes, frameTimes, obj.core_data, preTime = preTime, postTime = postTime, sdfSigma=0.005)
+                image_sdfs.append(sdfs)
+                    
+        meanImageResps = np.mean(image_sdfs, 0)            
+        latency = np.array([find_latency(s, stdev_thresh=5) for s in meanImageResps]) - 1000*preTime
+    
+    else:
+        changeImages = np.array(trials['change_image_name'][~ignore])
+        changeTimes = frameTimes[np.array(trials['change_frame'][~ignore]).astype(int)] 
+        for u in probeSync.getOrderedUnits(units[pid]):
+            region = units[pid][u]['ccfRegion']
+            if not selectOnRegion or (region is not None and any([r in region for r in regionsToConsider])):
+                spikes = units[pid][u]['times']
+                uid.append(pid+str(u))
+                unit_sdf = []
+                for ii, im in enumerate(np.unique(changeImages)):                    
+                    theseTimes = changeTimes[changeImages==im]
+                    sdf, time = getSDF(spikes, theseTimes-preTime, preTime+postTime, sigma=0.005)
+                    unit_sdf.append(sdf)
+                image_sdfs.append(unit_sdf)
+                
+        meanImageResps = np.mean(image_sdfs, 0)            
+        latency = np.array([find_latency(s, stdev_thresh=5) for s in meanImageResps]) - 1000*preTime
+        
+        meanProbeResponse.append(np.mean(meanImageResps,0))        
+        
+        fig, ax = plt.subplots()
+        fig.suptitle(pid)
+        #fig_in, ax_in = plt.subplots()
+        for i, (s, l) in enumerate(zip(meanImageResps, latency.astype(np.int) + int(1000*preTime))):
+            ax.plot(s)
+            #ax.plot(l-100, s[100:200][l-100], 'ro')    
+            #ax.set_ylim([0, 30])
+            
+            #ax_in.plot(s)
+            #ax_in.plot(l, s[l], 'ro')    
+            #ax_in.set_ylim([0, 30])
 
-
-
-
-
+meanProbeResponse = np.array(meanProbeResponse)
+plt.figure()
+colors = ['b', 'g', 'k', 'c', 'y', 'r']
+for i, (c, r, p) in enumerate(zip(colors, meanProbeResponse, probes_to_run)):
+    r -= r.min()
+    r /= r.max()
+    plt.plot(r, c)
+    plt.text(1, 9-0.3*i, p, color=c)
 
 regionsToConsider=['VIS', 'cc', 'LP', 'LGd']
 regionsToConsider=['VIS', 'cc']
