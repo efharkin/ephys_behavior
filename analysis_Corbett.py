@@ -949,10 +949,9 @@ ignore = obj.ignore
 frameTimes = obj.frameAppearTimes
 trials = obj.trials
 units = obj.units
-probes_to_run = ['C']
-
 selectOnRegion = False
 
+probes_to_run = ['C']
 clf = RandomForestClassifier(1000, min_samples_split=5)
 
 #selectedTrials = miss & (~ignore)
@@ -1237,7 +1236,7 @@ for tp in np.arange(meanImageResps.shape[1]):
 
 
 #calculate pop response for each probe
-probes_to_run = ['A', 'B', 'C', 'E', 'F']
+probes_to_run = ['A', 'B', 'C', 'F']
 uid = []
 image_sdfs = []   
 preTime = 1

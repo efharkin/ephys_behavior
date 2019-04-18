@@ -22,10 +22,10 @@ import scipy
 from analysis_utils import find_run_transitions
 
 #Parent directory with sorted data, sync and pkl files
-dataDir = 'Z:\\03262019_417882'
+dataDir = 'Z:\\03272019_417882'
 
 #Which probes to run through analysis
-probeIDs = ['A', 'B', 'C', 'E', 'F']
+probeIDs = ['A', 'B', 'C',  'F']
 probePXIDict = {'A': 'slot2-probe1', 'B': 'slot2-probe2', 'C': 'slot2-probe3', 'D': 'slot3-probe1', 'E': 'slot3-probe2', 'F': 'slot3-probe3'}
 
 class behaviorEphys():
@@ -156,6 +156,7 @@ class behaviorEphys():
         
         self.behaviorStimDur = np.array(self.core_data['visual_stimuli']['duration'])
         self.preGrayDur = np.stack(self.trials['blank_duration_range']) # where is actual gray dur
+        self.lastBehaviorTime = self.frameAppearTimes[self.trials['endframe'].values[-1]]    
         
     
     def getEyeTrackingData(self):
@@ -190,7 +191,9 @@ class behaviorEphys():
             self.imagePixPerDeg = self.images[0].shape[0]/self.monHeightDeg 
             self.imageDownsamplePixPerDeg = self.imagesDownsampled[0].shape[0]/self.monHeightDeg
         
-    
+            self.first_rf_frame = self.trials['endframe'].values[-1] + self.rf_pre_blank_frames + 1
+            self.rf_frameTimes = self.frameAppearTimes[self.first_rf_frame:]
+            self.rf_trial_start_times = self.rf_frameTimes[np.array([f[0] for f in np.array(self.rfstim['sweep_frames'])]).astype(np.int)]
     
     
     
