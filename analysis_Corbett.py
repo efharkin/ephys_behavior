@@ -1238,12 +1238,12 @@ for tp in np.arange(meanImageResps.shape[1]):
 #calculate pop response for each probe
 probes_to_run = ['A', 'B', 'C', 'F']
 uid = []
-image_sdfs = []   
 preTime = 1
 postTime = 1
 allFlashes = False  #if True pop response will be calculated using all flashes of stimulus, if false only change flashes will be used
 meanProbeResponse = []
 for pid in probes_to_run:
+    image_sdfs = []   
     if allFlashes:
         for u in probeSync.getOrderedUnits(units[pid]):
             region = units[pid][u]['ccfRegion']
@@ -1379,3 +1379,77 @@ for source_unit in inLP:
 #    minind = np.unravel_index(np.argmin(source_ccgs), source_ccgs.shape)
     ax.plot(np.mean(source_ccgs, 0))
     fig.suptitle(source_unit)
+
+
+
+
+#### compare FS and RS pop response to change stimulus
+regionsToConsider = ['VIS', 'cc']
+probes_to_run = ['A', 'B', 'C']
+preTime = 1
+postTime = 1.5
+allFlashes = False  #if True pop response will be calculated using all flashes of stimulus, if false only change flashes will be used
+ptCriterion = lambda pt: pt<0.35
+
+if allFlashes:
+    for pid in probes_to_run:
+        image_sdfs = []
+        for u in probeSync.getOrderedUnits(units[pid]):
+            region = units[pid][u]['ccfRegion']
+            if not selectOnRegion or (region is not None and any([r in region for r in regionsToConsider])):
+                spikes = units[pid][u]['times']
+                uid.append(pid+str(u))
+                sdfs, time = make_psth_all_flashes(spikes, frameTimes, obj.core_data, preTime = preTime, postTime = postTime, sdfSigma=0.005)
+                image_sdfs.append(sdfs)
+                
+        meanImageResps = np.mean(image_sdfs, 0)            
+        latency = np.array([find_latency(s, stdev_thresh=5) for s in meanImageResps]) - 1000*preTime
+
+else:
+    changeImages = np.array(trials['change_image_name'][~ignore])
+    changeTimes = frameTimes[np.array(trials['change_frame'][~ignore]).astype(int)] 
+    for pid in probes_to_run:
+        image_sdfs = []
+        for u in probeSync.getOrderedUnits(units[pid]):
+            ptot = units[pid][u]['peakToTrough']
+            if ptCriterion(ptot) and units[pid][u]['ccfRegion'] is not 'hipp':
+                print(pid + ': ' + str(u))
+                region = units[pid][u]['ccfRegion']            
+                if not selectOnRegion or (region is not None and any([r in region for r in regionsToConsider])):
+                    spikes = units[pid][u]['times']
+                    uid.append(pid+str(u))
+                    unit_sdf = []
+                    for ii, im in enumerate(np.unique(changeImages)):                    
+                        theseTimes = changeTimes[changeImages==im]
+                        sdf, time = getSDF(spikes, theseTimes-preTime, preTime+postTime, sigma=0.005)
+                        unit_sdf.append(sdf)
+                    image_sdfs.append(unit_sdf)
+        
+        image_sdfs = np.array(image_sdfs)
+        image_sdfs_across_images = np.mean(image_sdfs, 1)
+        figim, axim = plt.subplots()
+        figim.suptitle(pid)
+        axim.imshow(image_sdfs_across_images, aspect='auto', cmap='plasma')
+        print('Num cells in ' + pid + ': ' + str(len(image_sdfs)))
+        meanImageResps = np.mean(image_sdfs, 0)            
+        latency = np.array([find_latency(s, stdev_thresh=5) for s in meanImageResps]) - 1000*preTime
+        fig, ax = plt.subplots()
+        fig.suptitle(pid)
+        ax.plot(meanImageResps.T)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
