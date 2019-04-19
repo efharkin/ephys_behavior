@@ -56,7 +56,8 @@ class behaviorEphys():
         self.getFrameTimes()
         self.getBehaviorData()
         self.getEyeTrackingData()
-        self.getRFStimInfo()
+        self.getRFandFlashStimInfo()
+        self.getPassiveStimInfo()
         
     def getUnits(self):    
         self.units = {str(pid): probeSync.getUnitData(self.dataDir, self.syncDataset, pid, self.PXIDict) for pid in self.probes_to_analyze}
@@ -178,23 +179,40 @@ class behaviorEphys():
             self.eyeData = None
             
     
-    def getRFStimInfo(self):
-        self.rfstim_pickle_file = glob.glob(os.path.join(self.dataDir, '*brain_observatory_stimulus.pkl'))
-        if len(self.rfstim_pickle_file)>0:
-            rf_stim_dict = pd.read_pickle(self.rfstim_pickle_file[0])
-            self.rf_pre_blank_frames = int(rf_stim_dict['pre_blank_sec']*rf_stim_dict['fps'])
-            self.rfstim = rf_stim_dict['stimuli'][0]
-            self.monSizePix = rf_stim_dict['monitor']['sizepix']
-            self.monHeightCm = self.monSizePix[1]/self.monSizePix[0]*rf_stim_dict['monitor']['widthcm']
-            self.monDistCm = rf_stim_dict['monitor']['distancecm']
+    def getRFandFlashStimInfo(self):
+        self.rf_pickle_file = glob.glob(os.path.join(self.dataDir, '*brain_observatory_stimulus.pkl'))
+        if len(self.rf_pickle_file)>0:
+            self.rfFlashStimDict = pd.read_pickle(self.rf_pickle_file[0])
+            self.monSizePix = self.rfFlashStimDict['monitor']['sizepix']
+            self.monHeightCm = self.monSizePix[1]/self.monSizePix[0]*self.rfFlashStimDict['monitor']['widthcm']
+            self.monDistCm = self.rfFlashStimDict['monitor']['distancecm']
             self.monHeightDeg = np.degrees(2*np.arctan(0.5*self.monHeightCm/self.monDistCm))
             self.imagePixPerDeg = self.images[0].shape[0]/self.monHeightDeg 
             self.imageDownsamplePixPerDeg = self.imagesDownsampled[0].shape[0]/self.monHeightDeg
-        
-            self.first_rf_frame = self.trials['endframe'].values[-1] + self.rf_pre_blank_frames + 1
-            self.rf_frameTimes = self.frameAppearTimes[self.first_rf_frame:]
-            self.rf_trial_start_times = self.rf_frameTimes[np.array([f[0] for f in np.array(self.rfstim['sweep_frames'])]).astype(np.int)]
-    
+            
+            self.rfStimParams = self.rfFlashStimDict['stimuli'][0]
+            rf_pre_blank_frames = int(self.rfFlashStimDict['pre_blank_sec']*self.rfFlashStimDict['fps'])
+            first_rf_frame = self.trials['endframe'].values[-1] + rf_pre_blank_frames + 1
+            self.rf_frameTimes = self.frameAppearTimes[first_rf_frame:]
+            self.rf_trial_start_times = self.rf_frameTimes[np.array([f[0] for f in np.array(self.rfStimParams['sweep_frames'])]).astype(np.int)]
+            
+            self.flashStimParams = self.rfFlashStimDict['stimuli'][1]
+            
+    def getPassiveStimInfo(self):
+        self.passive_pickle_file = glob.glob(os.path.join(self.dataDir, '*-replay-script*.pkl'))
+        if len(self.passive_pickle_file)>0:
+            passiveStimDict = pd.read_pickle(self.passive_pickle_file[0])
+            self.passiveStimParams = passiveStimDict['stimuli'][0]
+            self.passiveFrameImages = np.array(self.passiveStimParams['sweep_params']['ReplaceImage'][0])
+            passiveImageNames = [img for img in np.unique(self.passiveFrameImages) if img is not None]
+            nonGrayFrames = np.in1d(self.passiveFrameImages,passiveImageNames)
+            self.passiveImageOnsetFrames = np.where(np.diff(nonGrayFrames.astype(int))>0)[0]+1
+            self.passiveChangeFrames = np.array([frame for i,frame in enumerate(self.passiveImageOnsetFrames[1:]) if self.passiveFrameImages[frame]!=self.passiveFrameImages[self.passiveImageOnsetFrames[i]]])
+            self.passiveChangeImages = self.passiveFrameImages[self.passiveChangeFrames]
+            
+            firstPassiveFrame = self.trials['endframe'].values[-1] + self.rfFlashStimDict['vsynccount'] + 1
+            self.passiveFrameAppearTimes = self.frameAppearTimes[firstPassiveFrame:]
+            
     
     
     

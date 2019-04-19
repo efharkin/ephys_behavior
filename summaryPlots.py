@@ -222,10 +222,8 @@ def plot_images(obj, axes):
 
 def plot_rf(obj, spikes, axes=None, resp_latency=0.05):
     #extract trial stim info (xpos, ypos, ori)
-    rfstim = obj.rfstim
-    sweep_table = np.array(rfstim['sweep_table'])   #table with rfstim parameters, indexed by sweep order to give stim for each trial
-    sweep_order = np.array(rfstim['sweep_order'])   #index of stimuli for sweep_table for each trial
-    sweep_frames = np.array(rfstim['sweep_frames']) #(start frame, end frame) for each trial
+    sweep_table = np.array(obj.rfStimParams['sweep_table'])   #table with rfstim parameters, indexed by sweep order to give stim for each trial
+    sweep_order = np.array(obj.rfStimParams['sweep_order'])   #index of stimuli for sweep_table for each trial
     
     trial_xpos = np.array([pos[0] for pos in sweep_table[sweep_order, 0]])
     trial_ypos = np.array([pos[1] for pos in sweep_table[sweep_order, 0]])
@@ -235,12 +233,7 @@ def plot_rf(obj, spikes, axes=None, resp_latency=0.05):
     ypos = np.unique(trial_ypos)
     ori = np.unique(trial_ori)
     
-    #get first frame for this stimulus (first frame after end of behavior session)
-    first_rf_frame = obj.first_rf_frame
-    rf_frameTimes = obj.rf_frameTimes
-    rf_trial_start_times = obj.rf_trial_start_times
-    
-    trial_spikes = analysis_utils.find_spikes_per_trial(spikes, rf_trial_start_times+resp_latency, rf_trial_start_times+resp_latency+0.2)
+    trial_spikes = analysis_utils.find_spikes_per_trial(spikes, obj.rf_trial_start_times+resp_latency, obj.rf_trial_start_times+resp_latency+0.2)
     respMat = np.zeros([ypos.size, xpos.size, ori.size])
     for (y, x, o, tspikes) in zip(trial_ypos, trial_xpos, trial_ori, trial_spikes):
         respInd = tuple([np.where(ypos==y)[0][0], np.where(xpos==x)[0][0], np.where(ori==o)[0][0]])
