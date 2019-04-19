@@ -87,6 +87,16 @@ class behaviorEphys():
                         if int(structID.childNodes[0].nodeValue)==self.units[pid][u]['ccfID']:
                             self.units[pid][u]['ccfRegion'] = annotationStructures.getElementsByTagName('structure')[ind].childNodes[7].childNodes[0].nodeValue[1:-1]
                             break
+        elif os.path.isfile(os.path.join(os.path.dirname(self.dataDir), 'hippocampusChannels.xlsx')):
+            print('assigning hippocampus channels')
+            hippoFile = os.path.join(os.path.dirname(self.dataDir), 'hippocampusChannels.xlsx')
+            hippodf = pd.read_excel(hippoFile, sheet_name=os.path.basename(self.dataDir))
+            for pid in self.probes_to_analyze:
+                hippoendchan = int(hippodf[hippodf.Probe==pid].hipp_end_chan)
+                for u in self.units[pid]:
+                    if self.units[pid][u]['peakChan']<hippoendchan:
+                        self.units[pid][u]['ccfRegion'] = 'hipp'
+                
         else:
             for pid in self.probes_to_analyze:
                 for u in self.units[pid]:
