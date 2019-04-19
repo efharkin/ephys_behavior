@@ -26,7 +26,7 @@ dataDir = 'Z:\\03272019_417882'
 
 #Which probes to run through analysis
 probeIDs = ['A', 'B', 'C',  'F']
-probePXIDict = {'A': 'slot2-probe1', 'B': 'slot2-probe2', 'C': 'slot2-probe3', 'D': 'slot3-probe1', 'E': 'slot3-probe2', 'F': 'slot3-probe3'}
+probePXIDict = {'A': 'slot2-probe1', 'B': 'slot2-probe2', 'C': 'slot2-probe3', 'D': 'slot3-probe1', 'E': 'slot3-probe2', 'F': 'slot3-probe4'}
 
 class behaviorEphys():
     
@@ -99,9 +99,12 @@ class behaviorEphys():
                 hippodf = pd.read_excel(hippoFile, sheetname=os.path.basename(self.dataDir))
                 for pid in self.probes_to_analyze:
                     hippoendchan = int(hippodf[hippodf.Probe==pid].hipp_end_chan)
+                    cortexendchan = int(hippodf[hippodf.Probe==pid].cortex_end_chan)
                     for u in self.units[pid]:
                         if self.units[pid][u]['peakChan']<hippoendchan:
                             self.units[pid][u]['ccfRegion'] = 'hipp'
+                        elif self.units[pid][u]['peakChan']>cortexendchan:
+                            self.units[pid][u]['ccfRegion'] = 'air'
                 
     def getFrameTimes(self):
         # Get frame times from sync file
