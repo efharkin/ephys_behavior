@@ -6,7 +6,7 @@ Created on Thu Aug 23 11:29:39 2018
 """
 
 from __future__ import division
-import os, glob, h5py, nrrd, cv2
+import os, glob, h5py, nrrd, cv2, datetime
 from xml.dom import minidom
 import numpy as np
 import pandas as pd
@@ -26,7 +26,6 @@ dataDir = 'Z:\\03272019_417882'
 
 #Which probes to run through analysis
 probeIDs = ['A', 'B', 'C',  'F']
-probePXIDict = {'A': 'slot2-probe1', 'B': 'slot2-probe2', 'C': 'slot2-probe3', 'D': 'slot3-probe1', 'E': 'slot3-probe2', 'F': 'slot3-probe4'}
 
 class behaviorEphys():
     
@@ -41,7 +40,12 @@ class behaviorEphys():
             self.probes_to_analyze = probeIDs
         else:
             self.probes_to_analyze = probes
-        self.PXIDict = probePXIDict
+        self.experimentDate = os.path.basename(self.dataDir)[:8]
+        if datetime.datetime.strptime(self.experimentDate,'%m%d%Y') < datetime.datetime(2019,3,15):
+            fprobe = '4'
+        else:
+            fprobe = '3'
+        self.PXIDict = {'A': 'slot2-probe1', 'B': 'slot2-probe2', 'C': 'slot2-probe3', 'D': 'slot3-probe1', 'E': 'slot3-probe2', 'F': 'slot3-probe'+fprobe}
         
     def saveHDF5(self,filePath=None):
         fileIO.objToHDF5(self,filePath)
