@@ -143,6 +143,8 @@ def load_spike_info(spike_data_dir, p_sampleRate, shift):
         #check if this unit is noise
         peakChan = units[u]['peakChan']
         temp = units[u]['template'][:, peakChan]
+        pt = findPeakToTrough(temp, plot=False)
+        units[u]['peakToTrough'] = pt
         if np.sum(temp<temp.min()*0.1)>30:
             units[u]['label'] = 'noise'
         
@@ -208,5 +210,34 @@ def getLFPdata(dataDir, pid, syncDataset, probePXIDict, num_channels=384, probeG
     
     return lfp_data_reshape, time_stamps_shifted
 
+
+def findPeakToTrough(waveformArray, sampleRate=30000, plot=True):
+    #waveform array should be units x samples
+    if waveformArray.ndim==1:
+        waveformArray=waveformArray[None,:]
+    
+    peakToTrough = np.zeros(len(waveformArray))       
+    for iw, w in enumerate(waveformArray):
+#        peakInd = np.argmax(np.absolute(w))
+#        peakToTrough[iw] = (np.argmin(w[peakInd:]) if w[peakInd]>0 else np.argmax(w[peakInd:]))/(sampleRate/1000.0)
+        if any(np.isnan(w)):
+            peakToTrough[iw] = np.nan
+        else:
+            peakInd = np.argmin(w)
+            peakToTrough[iw] = np.argmax(w[peakInd:])/(sampleRate/1000.0)       
+    
+    if plot:
+        plt.figure(facecolor='w')
+        ax = plt.subplot(1,1,1)
+        ax.hist(peakToTrough[~np.isnan(peakToTrough)],np.arange(0,1.2,0.05),color='k')
+        ax.plot([0.35]*2,[0,180],'k--')
+        for side in ('top','right'):
+            ax.spines[side].set_visible(False)
+        ax.tick_params(which='both',direction='out',top=False,right=False,labelsize=18)
+        ax.set_xlabel('Spike peak-to-trough (ms)',fontsize=20)
+        ax.set_ylabel('# Units',fontsize=20)
+        plt.tight_layout()
+     
+    return peakToTrough
     
     
