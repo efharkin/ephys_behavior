@@ -237,6 +237,9 @@ def findPeakToTrough(waveformArray, sampleRate=30000, plot=True):
         ax.set_xlabel('Spike peak-to-trough (ms)',fontsize=20)
         ax.set_ylabel('# Units',fontsize=20)
         plt.tight_layout()
+        
+    if len(peakToTrough)==1:
+        peakToTrough = peakToTrough[0]
      
     return peakToTrough
     
