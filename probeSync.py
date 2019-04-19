@@ -139,6 +139,13 @@ def load_spike_info(spike_data_dir, p_sampleRate, shift):
         units[u]['peakChan'] = np.unravel_index(np.argmin(units[u]['template']), units[u]['template'].shape)[1]
         units[u]['position'] = channel_positions[units[u]['peakChan']]
         units[u]['amplitudes'] = amplitudes[unit_idx]
+        
+        #check if this unit is noise
+        peakChan = units[u]['peakChan']
+        temp = units[u]['template'][:, peakChan]
+        if np.sum(temp<temp.min()*0.1)>30:
+            units[u]['label'] = 'noise'
+        
     return units
 
 
