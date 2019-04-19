@@ -96,7 +96,7 @@ class behaviorEphys():
             if os.path.isfile(os.path.join(os.path.dirname(self.dataDir), 'hippocampusChannels.xlsx')):
                 print('assigning hippocampus channels')
                 hippoFile = os.path.join(os.path.dirname(self.dataDir), 'hippocampusChannels.xlsx')
-                hippodf = pd.read_excel(hippoFile, sheet_name=os.path.basename(self.dataDir))
+                hippodf = pd.read_excel(hippoFile, sheetname=os.path.basename(self.dataDir))
                 for pid in self.probes_to_analyze:
                     hippoendchan = int(hippodf[hippodf.Probe==pid].hipp_end_chan)
                     for u in self.units[pid]:
