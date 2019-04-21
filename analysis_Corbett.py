@@ -801,7 +801,7 @@ postTime = 0.5
 for pid in probes_to_run:
     for u in probeSync.getOrderedUnits(units[pid]):
         region = units[pid][u]['ccfRegion']
-        if region is not None and any([r in region for r in regionsToConsider]):
+        if not selectOnRegion or (region is not None and any([r in region for r in regionsToConsider])):
             spikes = units[pid][u]['times']
             sdf, _ = make_psth_all_flashes(spikes, frameTimes, core_data, preTime=preTime, postTime=postTime)
             responseTensor.append(sdf)
@@ -1413,7 +1413,7 @@ else:
         for u in probeSync.getOrderedUnits(units[pid]):
             ptot = units[pid][u]['peakToTrough']
             if ptCriterion(ptot) and units[pid][u]['ccfRegion'] is not 'hipp':
-                print(pid + ': ' + str(u))
+                #print(pid + ': ' + str(u))
                 region = units[pid][u]['ccfRegion']            
                 if not selectOnRegion or (region is not None and any([r in region for r in regionsToConsider])):
                     spikes = units[pid][u]['times']
@@ -1439,17 +1439,106 @@ else:
 
 
 
+############
+#cluster units based on response to change
+############
+import clust
+from sklearn.ensemble import RandomForestClassifier
+from sklearn.model_selection import train_test_split
+
+obj = b
+ignore = obj.ignore
+frameTimes = obj.frameAppearTimes
+trials = obj.trials
+units = obj.units
+selectOnRegion = False
+
+probes_to_run = obj.probes_to_analyze
+
+responseTensor = []
+changeImages = np.array(trials['change_image_name'][~ignore])
+changeTimes = frameTimes[np.array(trials['change_frame'][~ignore]).astype(int)] 
+image_flash_times = obj.frameAppearTimes[np.array(obj.core_data['visual_stimuli']['frame'])]
+
+preTime = 1.8
+postTime = 1.5
+sdfs = []
+uids = []
+depths = []
+probes_to_run = ['C']
+for pid in probes_to_run:
+    for u in probeSync.getOrderedUnits(units[pid]):
+        region = units[pid][u]['ccfRegion']
+        if region not in ('air', 'hipp'):
+            if not selectOnRegion or (region is not None and any([r in region for r in regionsToConsider])):
+                spikes = units[pid][u]['times']
+                if np.sum(spikes<changeTimes[-1])<5000:
+                    continue
+                uid.append(pid+str(u))
+                unit_sdf = []
+                sdf, time = getSDF(spikes, changeTimes-preTime, preTime+postTime, sigma=0.001)
+                sdfs.append(sdf)       
+                uids.append(pid + '_' + str(u))
+                depths.append(units[pid][u]['peakChan'])
+
+depths=np.array(depths)
+sdfs = np.array(sdfs)
+sdfs = sdfs - np.mean(sdfs[:, :100], 1)[:, None]
+sdfs_norm = sdfs/np.max(np.absolute(sdfs), 1)[:, None]
+cID, l = clust.cluster(sdfs_norm, nClusters = 4, plot=True, nreps=10)
+
+#cID, l = clust.nestedPCAClust(sdfs)
+#cID, centroids = clust.kmeans(sdfs, 4)
+
+colors = 'bgrk'
+fig, ax = plt.subplots()
+for color, c in zip(colors, np.unique(cID)):
+    csdfs = sdfs[cID==c] 
+    plt.figure()
+    plt.plot(np.mean(csdfs,0))
+    plt.figure()
+    plt.imshow(csdfs, cmap='plasma', aspect='auto')
+    ax.plot(np.ones(csdfs.shape[0])+c, depths[cID==c], color + 'o')
+        
+
+flashBeforeChangeTime = int(1000*(preTime-0.75))
+flashBeforeChange = sdfs[:, flashBeforeChangeTime:flashBeforeChangeTime+500]
+changeFlash = sdfs[:, int(1000*preTime):int(1000*preTime)+500] 
+flashDiff = changeFlash - flashBeforeChange
+
+plt.figure()
+plt.plot(changeFlash.mean(axis=0))
+plt.plot(flashBeforeChange.mean(axis=0))
+plt.plot(flashDiff.mean(axis=0))
 
 
+#combining across days
+v1sdfs_norm = v1sdfs_all/np.max(np.absolute(v1sdfs_all), 1)[:, None]
+cID, l = clust.cluster(v1sdfs_norm, nClusters = 6, plot=True, nreps=10)
 
+colors = 'bgrk'
+for c in np.unique(cID):
+    csdfs = v1sdfs_all[cID==c] 
+    plt.figure()
+    plt.plot(np.mean(csdfs,0))
+    plt.figure()
+    plt.imshow(csdfs, cmap='plasma', aspect='auto')
+    
+    
 
+flashBeforeChangeTime = int(1000*(preTime-0.75))
+flashBeforeChange = v1sdfs_all[:, flashBeforeChangeTime:flashBeforeChangeTime+500]
+changeFlash = v1sdfs_all[:, int(1000*preTime):int(1000*preTime)+500] 
 
+flashDiff = changeFlash - flashBeforeChange
 
-
-
-
-
-
-
+plt.figure()
+plt.plot(changeFlash.mean(axis=0))
+plt.plot(flashBeforeChange.mean(axis=0))
+plt.plot(flashDiff.mean(axis=0))
+    
+    
+    
+    
 
 
