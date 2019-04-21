@@ -223,6 +223,8 @@ class behaviorEphys():
                 goodPklInd = np.argmax(vsynccount)
                 self.passive_pickel_file = self.passive_pickle_file[goodPklInd]
                 abortedVsyncs = sum(vsynccount)-vsynccount[goodPklInd]
+            else:
+                abortedVsyncs = 0
             self.passiveStimDict = pd.read_pickle(self.passive_pickle_file[-1])
             self.passiveStimParams = self.passiveStimDict['stimuli'][0]
             self.passiveFrameImages = np.array(self.passiveStimParams['sweep_params']['ReplaceImage'][0])
