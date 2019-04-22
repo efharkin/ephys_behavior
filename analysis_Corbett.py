@@ -1466,15 +1466,16 @@ sdfs = []
 uids = []
 depths = []
 probes_to_run = ['C']
+ptCriterion = lambda pt: pt>0
 for pid in probes_to_run:
     for u in probeSync.getOrderedUnits(units[pid]):
         region = units[pid][u]['ccfRegion']
         if region not in ('air', 'hipp'):
             if not selectOnRegion or (region is not None and any([r in region for r in regionsToConsider])):
                 spikes = units[pid][u]['times']
-                if np.sum(spikes<changeTimes[-1])<5000:
+                if np.sum(spikes<changeTimes[-1])<5000 or not ptCriterion(units[pid][u]['peakToTrough']):
                     continue
-                uid.append(pid+str(u))
+                
                 unit_sdf = []
                 sdf, time = getSDF(spikes, changeTimes-preTime, preTime+postTime, sigma=0.001)
                 sdfs.append(sdf)       
@@ -1527,8 +1528,8 @@ for c in np.unique(cID):
     
 
 flashBeforeChangeTime = int(1000*(preTime-0.75))
-flashBeforeChange = v1sdfs_all[:, flashBeforeChangeTime:flashBeforeChangeTime+500]
-changeFlash = v1sdfs_all[:, int(1000*preTime):int(1000*preTime)+500] 
+flashBeforeChange = v1sdfs[:, flashBeforeChangeTime:flashBeforeChangeTime+500]
+changeFlash = v1sdfs[:, int(1000*preTime):int(1000*preTime)+500] 
 
 flashDiff = changeFlash - flashBeforeChange
 

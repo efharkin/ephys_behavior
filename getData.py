@@ -22,10 +22,10 @@ import scipy
 from analysis_utils import find_run_transitions
 
 #Parent directory with sorted data, sync and pkl files
-dataDir = 'Z:\\03272019_417882'
+dataDir = 'Z:\\03262019_417882'
 
 #Which probes to run through analysis
-probeIDs = ['A', 'B', 'C',  'F']
+probeIDs = ['C']
 
 class behaviorEphys():
     
@@ -98,17 +98,20 @@ class behaviorEphys():
                         self.units[pid][u][key] = None
     
             if os.path.isfile(os.path.join(os.path.dirname(self.dataDir), 'hippocampusChannels.xlsx')):
-                print('assigning hippocampus channels')
-                hippoFile = os.path.join(os.path.dirname(self.dataDir), 'hippocampusChannels.xlsx')
-                hippodf = pd.read_excel(hippoFile, sheetname=os.path.basename(self.dataDir))
-                for pid in self.probes_to_analyze:
-                    hippoendchan = int(hippodf[hippodf.Probe==pid].hipp_end_chan)
-                    cortexendchan = int(hippodf[hippodf.Probe==pid].cortex_end_chan)
-                    for u in self.units[pid]:
-                        if self.units[pid][u]['peakChan']<hippoendchan:
-                            self.units[pid][u]['ccfRegion'] = 'hipp'
-                        elif self.units[pid][u]['peakChan']>cortexendchan:
-                            self.units[pid][u]['ccfRegion'] = 'air'
+                try:
+                    print('assigning hippocampus channels')
+                    hippoFile = os.path.join(os.path.dirname(self.dataDir), 'hippocampusChannels.xlsx')
+                    hippodf = pd.read_excel(hippoFile, sheetname=os.path.basename(self.dataDir))
+                    for pid in self.probes_to_analyze:
+                        hippoendchan = int(hippodf[hippodf.Probe==pid].hipp_end_chan)
+                        cortexendchan = int(hippodf[hippodf.Probe==pid].cortex_end_chan)
+                        for u in self.units[pid]:
+                            if self.units[pid][u]['peakChan']<hippoendchan:
+                                self.units[pid][u]['ccfRegion'] = 'hipp'
+                            elif self.units[pid][u]['peakChan']>cortexendchan:
+                                self.units[pid][u]['ccfRegion'] = 'air'
+                except:
+                    print('could not assign hippocampus channels, sheet name may be wrong')
                 
     def getFrameTimes(self):
         # Get frame times from sync file
