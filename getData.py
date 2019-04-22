@@ -221,16 +221,22 @@ class behaviorEphys():
     def getPassiveStimInfo(self):
         self.passive_pickle_file = glob.glob(os.path.join(self.dataDir, '*-replay-script*.pkl'))
         if len(self.passive_pickle_file)>0:
-            passiveStimDict = pd.read_pickle(self.passive_pickle_file[0])
-            self.passiveStimParams = passiveStimDict['stimuli'][0]
+            if len(self.passive_pickle_file)>1:
+                vsynccount = [pd.read_pickle(f)['vsynccount'] for f in self.passive_pickle_file]
+                goodPklInd = np.argmax(vsynccount)
+                self.passive_pickel_file = self.passive_pickle_file[goodPklInd]
+                abortedVsyncs = sum(vsynccount)-vsynccount[goodPklInd]
+            else:
+                abortedVsyncs = 0
+            self.passiveStimDict = pd.read_pickle(self.passive_pickle_file[-1])
+            self.passiveStimParams = self.passiveStimDict['stimuli'][0]
             self.passiveFrameImages = np.array(self.passiveStimParams['sweep_params']['ReplaceImage'][0])
             passiveImageNames = [img for img in np.unique(self.passiveFrameImages) if img is not None]
             nonGrayFrames = np.in1d(self.passiveFrameImages,passiveImageNames)
             self.passiveImageOnsetFrames = np.where(np.diff(nonGrayFrames.astype(int))>0)[0]+1
             self.passiveChangeFrames = np.array([frame for i,frame in enumerate(self.passiveImageOnsetFrames[1:]) if self.passiveFrameImages[frame]!=self.passiveFrameImages[self.passiveImageOnsetFrames[i]]])
             self.passiveChangeImages = self.passiveFrameImages[self.passiveChangeFrames]
-            
-            firstPassiveFrame = self.trials['endframe'].values[-1] + self.rfFlashStimDict['vsynccount'] + 1
+            firstPassiveFrame = self.trials['endframe'].values[-1] + self.rfFlashStimDict['vsynccount'] + abortedVsyncs + 1
             self.passiveFrameAppearTimes = self.frameAppearTimes[firstPassiveFrame:]
             
     
