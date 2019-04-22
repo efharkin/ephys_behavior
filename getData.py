@@ -112,6 +112,7 @@ class behaviorEphys():
                                 self.units[pid][u]['ccfRegion'] = 'air'
                 except:
                     print('could not assign hippocampus channels, sheet name may be wrong')
+
                 
     def getFrameTimes(self):
         # Get frame times from sync file
