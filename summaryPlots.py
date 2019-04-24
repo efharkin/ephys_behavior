@@ -139,19 +139,19 @@ def plot_unit_summary(obj, pid, uid, multipageObj=None):
     fig.suptitle(figtitle,fontsize=14)
     
     if len(obj.omittedFlashFrames)==0:
-        gs = gridspec.GridSpec(9, 8)
+        gs = gridspec.GridSpec(9, 5)
         gs.update(top=0.95, bottom = 0.05, left=0.05, right=0.95, wspace=0.3)
         
         imgAxes = [plt.subplot(gs[i,0]) for i in range(8)]
         plot_images(obj, imgAxes)
         
-        rfAxes = [plt.subplot(gs[i,1]) for i in range(9)]
+        rfAxes = [plt.subplot(gs[i,0]) for i in range(9)]
         plot_rf(obj, spikes, rfAxes, resp_latency=0.05)
             
-        allflashax = [plt.subplot(gs[i,2:4]) for i in range(9)]
+        allflashax = [plt.subplot(gs[i,1]) for i in range(9)]
         plot_psth_all_flashes(obj, spikes, allflashax)
         
-        hitmissax = [plt.subplot(gs[i,4:]) for i in range(9)]
+        hitmissax = [plt.subplot(gs[i,1:]) for i in range(9)]
         plot_psth_hits_vs_misses(obj, spikes, hitmissax)
     
     else:
@@ -252,13 +252,14 @@ def plot_rf(obj, spikes, axes=None, resp_latency=0.05):
     rmapColor = plt.cm.magma(rmap)[:,:,:3]
     rmapColor *= rmap[:,:,None]
     
-    for ax,img in zip(axes[:-1],obj.imagesDownsampled):
+    for ax,img,imname in zip(axes[:-1],obj.imagesDownsampled,obj.imageNames):
         img = img.astype(float)
         img /= 255
         img *= 1-rmap
         ax.imshow(rmapColor+img[:,:,None])
         ax.set_xticks([])
         ax.set_yticks([])
+        ax.set_ylabel(imname,fontsize=12)
         
     axes[-1].imshow(rmap,cmap='magma')
     axes[-1].set_xticks([])
@@ -364,7 +365,7 @@ def plot_psth_hits_vs_misses(obj, spikes, axes=None, preTime=1.55, postTime=4.5,
     for ax,h,m in zip(axes,hitSDFs,missSDFs):
         for s in stimStarts:
             ax.add_patch(patches.Rectangle([s,0],width=stimdur,height=ymax,color='0.9',alpha=0.5))
-        ax.plot(t-preTime, h, 'b')
+        ax.plot(t-preTime, h, 'k')
         ax.plot(t-preTime, m, 'k')
         for side in ('right','top'):
             ax.spines[side].set_visible(False)
