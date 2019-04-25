@@ -1000,18 +1000,19 @@ for pid in probes_to_run:
     for u in probeSync.getOrderedUnits(units[pid]):
         region = units[pid][u]['ccfRegion']
         if not selectOnRegion or (region is not None and any([r in region for r in regionsToConsider])):
-            spikes = units[pid][u]['times']
-            uid.append(pid+str(u))
-            psth = makePSTH(spikes, changeTimes-preTime, preTime+postTime, binSize=0.01, avg=False)
-            if len(all_psths) == 0:
-                all_psths = np.copy(psth)
-#                baselines = np.copy(psth[:, 530:550])
-                
-            else:
-                all_psths = np.hstack([all_psths, psth])
-#                baselines = np.hstack([baselines, psth[:, 300:320]])
+            if region not in ['air', 'hipp']:
+                spikes = units[pid][u]['times']
+                uid.append(pid+str(u))
+                psth = makePSTH(spikes, changeTimes-preTime, preTime+postTime, binSize=0.01, avg=False)
+                if len(all_psths) == 0:
+                    all_psths = np.copy(psth)
+    #                baselines = np.copy(psth[:, 530:550])
+                    
+                else:
+                    all_psths = np.hstack([all_psths, psth])
+    #                baselines = np.hstack([baselines, psth[:, 300:320]])
 
-psth_train, psth_test, image_train, image_test = train_test_split(all_psths, changeImages, test_size=0.5)
+psth_train, psth_test, image_train, image_test = train_test_split(all_psths, changeImages, test_size=0.2)
 clf.fit(psth_train, image_train)
 score = clf.score(psth_test, image_test)
 print(score)
@@ -1465,7 +1466,7 @@ postTime = 1.5
 sdfs = []
 uids = []
 depths = []
-probes_to_run = ['C']
+probes_to_run = ['B']
 ptCriterion = lambda pt: pt>0
 for pid in probes_to_run:
     for u in probeSync.getOrderedUnits(units[pid]):
@@ -1512,34 +1513,162 @@ plt.plot(changeFlash.mean(axis=0))
 plt.plot(flashBeforeChange.mean(axis=0))
 plt.plot(flashDiff.mean(axis=0))
 
-
+#########################
 #combining across days
-v1sdfs_norm = v1sdfs_all/np.max(np.absolute(v1sdfs_all), 1)[:, None]
-cID, l = clust.cluster(v1sdfs_norm, nClusters = 6, plot=True, nreps=10)
+allsdfs = np.copy(v1sdfs)
+alldepths = np.copy(v1depths)
+allsdfs_norm = allsdfs/np.max(np.absolute(allsdfs), 1)[:, None]
+cID, l = clust.cluster(allsdfs_norm, nClusters = 8, plot=True, nreps=10)
 
-colors = 'bgrk'
-for c in np.unique(cID):
-    csdfs = v1sdfs_all[cID==c] 
-    plt.figure()
-    plt.plot(np.mean(csdfs,0))
-    plt.figure()
-    plt.imshow(csdfs, cmap='plasma', aspect='auto')
-    
+colors = 'bgrkcmyb'
+time = np.arange(-int(preTime*1000), int(postTime*1000))
+depthFig, depthax = plt.subplots()
+for i, (color, c) in enumerate(zip(colors, np.unique(cID))):
+    csdfs = allsdfs[cID==c] 
+    fig, ax = plt.subplots()
+    ax.plot(time, np.mean(csdfs,0), 'k')
+    formatFigure(fig, ax, xLabel='Time to change (ms)', yLabel='Flash Response (Hz)')
+    ax.set_xlim([time[0], time[-1]])
+#    plt.figure()
+#    plt.imshow(csdfs, cmap='plasma', aspect='auto', clim=[0, csdfs.max()])
+#    plt.colorbar()
+    depthax.plot(np.ones(csdfs.shape[0])+c, alldepths[cID==c], color  + 'o', alpha=0.3)
     
 
 flashBeforeChangeTime = int(1000*(preTime-0.75))
-flashBeforeChange = v1sdfs[:, flashBeforeChangeTime:flashBeforeChangeTime+500]
-changeFlash = v1sdfs[:, int(1000*preTime):int(1000*preTime)+500] 
+flashBeforeChange = allsdfs[:, flashBeforeChangeTime:flashBeforeChangeTime+500]
+changeFlash = allsdfs[:, int(1000*preTime):int(1000*preTime)+500] 
 
 flashDiff = changeFlash - flashBeforeChange
 
-plt.figure()
-plt.plot(changeFlash.mean(axis=0))
-plt.plot(flashBeforeChange.mean(axis=0))
-plt.plot(flashDiff.mean(axis=0))
-    
-    
-    
-    
+means = [a.mean(axis=0) for a in [flashBeforeChange, changeFlash, flashDiff]]
+sems = [a.std(axis=0)/np.sqrt(len(allsdfs)) for a in [flashBeforeChange, changeFlash, flashDiff]]
 
+
+fig, ax = plt.subplots()
+colors='kgr'
+for c,m,s in zip(colors, means, sems):
+    if not c == 'u':
+        latency = find_latency(m, 25)
+        print(latency)
+        ax.plot(m, c)
+        ax.fill_between(np.arange(m.size), m+s, m-s, color=c, alpha=0.4)
+        ax.plot(latency, m[latency], 'wo', ms = 8)
+#        ax.set_xlim([30, 100])
+        
+    
+formatFigure(fig, ax, xLabel='Time from Flash (ms)', yLabel='Flash Response (Hz)')
+    
+  
+c1 = allsdfs[cID==1]
+c2 = allsdfs[cID==3]
+    
+for c in [c1, c2]:
+    flashBeforeChangeTime = int(1000*(preTime-0.75))
+    flashBeforeChange = c[:, flashBeforeChangeTime:flashBeforeChangeTime+500]
+    changeFlash = c[:, int(1000*preTime):int(1000*preTime)+500] 
+    
+    flashDiff = changeFlash - flashBeforeChange
+    
+    means = [a.mean(axis=0) for a in [flashBeforeChange, changeFlash, flashDiff]]
+    sems = [a.std(axis=0)/np.sqrt(len(c)) for a in [flashBeforeChange, changeFlash, flashDiff]]
+    
+    
+    fig, ax = plt.subplots()
+    colors='kgr'
+    for c,m,s in zip(colors, means, sems):
+        if not c == 'u':
+            latency = find_latency(m, 25, stdev_thresh=3, min_points_above_thresh=10)
+            print(latency)
+            ax.plot(m, c)
+            ax.fill_between(np.arange(m.size), m+s, m-s, color=c, alpha=0.4)
+            ax.plot(latency, m[latency], 'wo', ms = 8)
+    #        ax.set_xlim([30, 100])
+        
+    formatFigure(fig, ax, xLabel='Time from Flash (ms)', yLabel='Flash Response (Hz)')
+    
+    
+#######
+# multi area multi day
+######
+    
+expDays = ['03122019_416656', '03132019_416656', '03262019_417882', '03272019_417882', '04042019_408528', '04102019']
+probesRecorded = ['ABC', 'ABCDEF', 'ABCEF', 'ABCF', 'ABCDEF', 'BCDEF']
+
+regionDict = {a:{k:[] for k in ['sdfs', 'depth']} for a in 'ABCDEF'}
+for exp, probes in zip(expDays, probesRecorded):
+    obj = getData.behaviorEphys('Z:\\' + exp, probes=probes)
+    obj.loadFromRawData()
+    
+    ignore = obj.ignore
+    frameTimes = obj.frameAppearTimes
+    trials = obj.trials
+    units = obj.units
+    selectOnRegion = False
+    changeImages = np.array(trials['change_image_name'][~ignore])
+    changeTimes = frameTimes[np.array(trials['change_frame'][~ignore]).astype(int)] 
+    image_flash_times = obj.frameAppearTimes[np.array(obj.core_data['visual_stimuli']['frame'])]
+
+    preTime = 1.8
+    postTime = 1.5
+        
+    ptCriterion = lambda pt: pt>0
+    for pid in probes:
+        sdfs = []
+        depths = []
+        for u in probeSync.getOrderedUnits(units[pid]):
+            region = units[pid][u]['ccfRegion']
+            if region not in ('air', 'hipp'):
+                if not selectOnRegion or (region is not None and any([r in region for r in regionsToConsider])):
+                    spikes = units[pid][u]['times']
+                    if np.sum(spikes<changeTimes[-1])<5000 or not ptCriterion(units[pid][u]['peakToTrough']):
+                        continue
+                    
+                    unit_sdf = []
+                    sdf, time = getSDF(spikes, changeTimes-preTime, preTime+postTime, sigma=0.001)
+                    sdfs.append(sdf)       
+                    depths.append(units[pid][u]['peakChan'])
+    
+        depths=np.array(depths) 
+        sdfs = np.array(sdfs)
+        regionDict[pid]['sdfs'].append(sdfs)
+        regionDict[pid]['depth'].append(depths)
+
+
+colormap = cm.Set1
+cmfig, cmax = plt.subplots()
+latfig, latax = plt.subplots()
+for i, p in enumerate('CDEFBA'):
+    c = np.concatenate(regionDict[p]['sdfs'])
+    c -= np.mean(c[:, :100], 1)[:, None]
+    flashBeforeChangeTime = int(1000*(preTime-0.75))
+    flashBeforeChange = c[:, flashBeforeChangeTime:flashBeforeChangeTime+500]
+    changeFlash = c[:, int(1000*preTime):int(1000*preTime)+500] 
+    
+    flashDiff = changeFlash - flashBeforeChange
+    
+    means = [a.mean(axis=0) for a in [flashBeforeChange, changeFlash, flashDiff]]
+    sems = [a.std(axis=0)/np.sqrt(len(c)) for a in [flashBeforeChange, changeFlash, flashDiff]]
+    
+    
+    fig, ax = plt.subplots()
+    fig.suptitle(p)
+    
+    for c,m,s in zip(colors, means, sems):
+        if not c == 'u':
+            latency = find_latency(m, 25, stdev_thresh=3, min_points_above_thresh=10)
+            print(latency)
+            ax.plot(m, c)
+            ax.fill_between(np.arange(m.size), m+s, m-s, color=c, alpha=0.4)
+            ax.plot(latency, m[latency], 'wo', ms = 8)
+    #        ax.set_xlim([30, 100])
+            
+    normChangeMod = means[2]/means[0].max()
+    normChangeMod = np.convolve(normChangeMod, np.ones(10), 'same')/10
+    cmax.plot(normChangeMod, color=colormap(i/11.))
+    cmax.text(0, 1+0.1*i, p, color=colormap(i/11.))
+    
+    latax.plot(i, latency, 'o', c=colormap(i/11.))
+        
+    formatFigure(fig, ax, xLabel='Time from Flash (ms)', yLabel='Flash Response (Hz)')
 
