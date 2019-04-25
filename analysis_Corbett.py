@@ -1637,7 +1637,7 @@ for exp, probes in zip(expDays, probesRecorded):
 
 colormap = cm.Set1
 cmfig, cmax = plt.subplots()
-latfig, latax = plt.subplots()
+cmscatterfig, cmscatterax = plt.subplots()
 for i, p in enumerate('CDEFBA'):
     c = np.concatenate(regionDict[p]['sdfs'])
     c -= np.mean(c[:, :100], 1)[:, None]
@@ -1649,7 +1649,7 @@ for i, p in enumerate('CDEFBA'):
     
     means = [a.mean(axis=0) for a in [flashBeforeChange, changeFlash, flashDiff]]
     sems = [a.std(axis=0)/np.sqrt(len(c)) for a in [flashBeforeChange, changeFlash, flashDiff]]
-    
+    latencies = [find_latency(m, 25, stdev_thresh=3, min_points_above_thresh=10) for m in means]
     
     fig, ax = plt.subplots()
     fig.suptitle(p)
@@ -1662,13 +1662,23 @@ for i, p in enumerate('CDEFBA'):
             ax.fill_between(np.arange(m.size), m+s, m-s, color=c, alpha=0.4)
             ax.plot(latency, m[latency], 'wo', ms = 8)
     #        ax.set_xlim([30, 100])
-            
+           
+    cellLogChangeMod = np.log2(flashDiff.max(axis=1)/flashBeforeChange.max(axis=1))           
+    cellLogChangeMean = cellLogChangeMod.mean()
+    cellLogChangeSEM = cellLogChangeMod.std()/np.sqrt(flashDiff.shape[0])
+        
+    
     normChangeMod = means[2]/means[0].max()
     normChangeMod = np.convolve(normChangeMod, np.ones(10), 'same')/10
-    cmax.plot(normChangeMod, color=colormap(i/11.))
+    cmax.plot(normChangeMod[:375], color=colormap(i/11.))
     cmax.text(0, 1+0.1*i, p, color=colormap(i/11.))
     
-    latax.plot(i, latency, 'o', c=colormap(i/11.))
+    cmscatterax.plot(i, cellLogChangeMean, 'o', c=colormap(i/11.))
+    cmscatterax.errorbar(i , cellLogChangeMean, cellLogChangeSEM, c=colormap(i/11.))
+#    latax.plot(i, latencies[0], 'o', c=colormap(i/11.))
         
     formatFigure(fig, ax, xLabel='Time from Flash (ms)', yLabel='Flash Response (Hz)')
 
+formatFigure(cmfig, cmax, xLabel='Time from flash (ms)', yLabel = 'Norm. Change Modulation')
+formatFigure(cmscatterfig, cmscatterax, xLabel='Area', yLabel = 'Norm. Change Modulation Peak')
+#formatFigure(latfig, latax, xLabel='Time from flash (ms)', yLabel = 'Norm. Change Modulation')
