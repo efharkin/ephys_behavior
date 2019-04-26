@@ -1638,15 +1638,25 @@ for exp, probes in zip(expDays, probesRecorded):
 colormap = cm.Set1
 cmfig, cmax = plt.subplots()
 cmscatterfig, cmscatterax = plt.subplots()
+allDepths = []
+allDiffs = []
 for i, p in enumerate('CDEFBA'):
     c = np.concatenate(regionDict[p]['sdfs'])
+    depths = []
+    for d in regionDict[p]['depth']:
+        maxd = float(d.max())
+        mind = float(d.min())
+        depths.append((d-mind)/(maxd-mind))
+    
+    depths = np.concatenate(depths)
     c -= np.mean(c[:, :100], 1)[:, None]
     flashBeforeChangeTime = int(1000*(preTime-0.75))
     flashBeforeChange = c[:, flashBeforeChangeTime:flashBeforeChangeTime+500]
     changeFlash = c[:, int(1000*preTime):int(1000*preTime)+500] 
     
     flashDiff = changeFlash - flashBeforeChange
-    
+    allDiffs.append([np.convolve(fd, np.ones(10), 'same')/(10*fbc.max()) for fd, fbc in zip(flashDiff, flashBeforeChange)])
+    allDepths.append(depths)
     means = [a.mean(axis=0) for a in [flashBeforeChange, changeFlash, flashDiff]]
     sems = [a.std(axis=0)/np.sqrt(len(c)) for a in [flashBeforeChange, changeFlash, flashDiff]]
     latencies = [find_latency(m, 25, stdev_thresh=3, min_points_above_thresh=10) for m in means]
@@ -1664,9 +1674,16 @@ for i, p in enumerate('CDEFBA'):
     #        ax.set_xlim([30, 100])
            
     cellLogChangeMod = np.log2(flashDiff.max(axis=1)/flashBeforeChange.max(axis=1))           
+#    cellLogChangeMod = flashDiff.max(axis=1)/flashBeforeChange.max(axis=1)
     cellLogChangeMean = cellLogChangeMod.mean()
     cellLogChangeSEM = cellLogChangeMod.std()/np.sqrt(flashDiff.shape[0])
-        
+    
+    dfig, dax = plt.subplots()
+    dfig.suptitle(p)
+    ddf = pd.DataFrame({'depth': depths, 'cmod':cellLogChangeMod})
+    ddf = ddf.sort_values(by=['depth'])
+    runningAverage = ddf.rolling(50).mean().values
+    dax.plot(runningAverage[:, 1], runningAverage[:, 0], 'k')    
     
     normChangeMod = means[2]/means[0].max()
     normChangeMod = np.convolve(normChangeMod, np.ones(10), 'same')/10
@@ -1682,3 +1699,17 @@ for i, p in enumerate('CDEFBA'):
 formatFigure(cmfig, cmax, xLabel='Time from flash (ms)', yLabel = 'Norm. Change Modulation')
 formatFigure(cmscatterfig, cmscatterax, xLabel='Area', yLabel = 'Norm. Change Modulation Peak')
 #formatFigure(latfig, latax, xLabel='Time from flash (ms)', yLabel = 'Norm. Change Modulation')
+
+plt.figure()
+allDepths = np.concatenate(allDepths)
+allDiffs = np.concatenate(allDiffs)
+depthSortedIndex = np.argsort(allDepths)
+plt.imshow(allDiffs[depthSortedIndex], clim=[0, 3], cmap='plasma', aspect='auto')
+
+dafig, daax = plt.subplots()
+allDepths = allDepths[allDiffs.max(axis=1)<15]
+allDiffs = allDiffs[allDiffs.max(axis=1)<15]
+ddf = pd.DataFrame({'depth': allDepths, 'cmod':allDiffs.max(axis=1)})
+ddf = ddf.sort_values(by=['depth'])
+runningAverage = ddf.rolling(50).mean().values
+daax.plot(runningAverage[:, 1], runningAverage[:, 0], 'k')    
