@@ -25,7 +25,7 @@ from analysis_utils import find_run_transitions
 dataDir = 'Z:\\04112019'
 
 #Which probes to run through analysis
-probeIDs = ['BCDEF']
+probeIDs = 'BCDEF'
 
 class behaviorEphys():
     
