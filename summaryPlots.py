@@ -139,19 +139,19 @@ def plot_unit_summary(obj, pid, uid, multipageObj=None):
     fig.suptitle(figtitle,fontsize=14)
     
     if len(obj.omittedFlashFrames)==0:
-        gs = gridspec.GridSpec(9, 5)
+        gs = gridspec.GridSpec(9, 7)
         gs.update(top=0.95, bottom = 0.05, left=0.05, right=0.95, wspace=0.3)
         
         imgAxes = [plt.subplot(gs[i,0]) for i in range(8)]
         plot_images(obj, imgAxes)
         
-        rfAxes = [plt.subplot(gs[i,0]) for i in range(9)]
+        rfAxes = [plt.subplot(gs[i,1]) for i in range(9)]
         plot_rf(obj, spikes, rfAxes, resp_latency=0.05)
             
-        allflashax = [plt.subplot(gs[i,1]) for i in range(9)]
+        allflashax = [plt.subplot(gs[i,2]) for i in range(9)]
         plot_psth_all_flashes(obj, spikes, allflashax)
         
-        hitmissax = [plt.subplot(gs[i,1:]) for i in range(9)]
+        hitmissax = [plt.subplot(gs[i,3:]) for i in range(9)]
         plot_psth_hits_vs_misses(obj, spikes, hitmissax)
     
     else:
@@ -363,10 +363,10 @@ def plot_psth_hits_vs_misses(obj, spikes, axes=None, preTime=1.55, postTime=4.5,
     stimint = stimdur+obj.preGrayDur[0,0]
     stimStarts = np.concatenate((np.arange(-stimint,-preTime,-stimint),np.arange(0,postTime,stimint)))
     for ax,h,m in zip(axes,hitSDFs,missSDFs):
-        for s in stimStarts:
-            ax.add_patch(patches.Rectangle([s,0],width=stimdur,height=ymax,color='0.9',alpha=0.5))
-        ax.plot(t-preTime, h, 'k')
-        ax.plot(t-preTime, m, 'k')
+        for s,clr in zip(stimStarts,['0.9']*2+['0.5']*6):
+            ax.add_patch(patches.Rectangle([s,0],width=stimdur,height=ymax,color=clr,alpha=0.5))
+        ax.plot(t-preTime, h, 'k', linewidth=2)
+        ax.plot(t-preTime, m, 'b', linewidth=2)
         for side in ('right','top'):
             ax.spines[side].set_visible(False)
         ax.tick_params(direction='out',top=False,right=False,labelsize=10)
@@ -377,7 +377,7 @@ def plot_psth_hits_vs_misses(obj, spikes, axes=None, preTime=1.55, postTime=4.5,
             ax.set_yticklabels([])
         if ax is not axes[-1]:
             ax.set_xticklabels([])
-    axes[-1].set_xlabel('Time to change (s)',fontsize=12)
+    axes[-1].set_xlabel('Time from change (s)',fontsize=12)
     
 
 def plot_spike_amplitudes(obj, pid, uid, axis):
