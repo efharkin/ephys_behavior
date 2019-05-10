@@ -22,10 +22,10 @@ import scipy
 from analysis_utils import find_run_transitions
 
 #Parent directory with sorted data, sync and pkl files
-dataDir = 'Z:\\03262019_417882'
+dataDir = 'Z:\\04112019'
 
 #Which probes to run through analysis
-probeIDs = ['C']
+probeIDs = 'BCDEF'
 
 class behaviorEphys():
     
