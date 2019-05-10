@@ -116,6 +116,15 @@ class behaviorEphys():
                                 self.units[pid][u]['ccfRegion'] = 'air'
                 except:
                     print('could not assign hippocampus channels, sheet name may be wrong')
+                    
+                    
+    def saveCCFPositionsAsArray(self):
+        for pid in self.probes_to_analyze:
+            f = os.path.join(self.dataDir,'UnitCCFPositions_probe'+pid+'.npy')
+            d = np.array([self.units[pid][u]['ccf'] for u in probeSync.getOrderedUnits(self.units[pid])])
+            d /= 25 # 25 um per ccf voxel
+            d += 1 # for ImageGui
+            np.save(f,d)
 
                 
     def getFrameTimes(self):
