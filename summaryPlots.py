@@ -365,8 +365,8 @@ def plot_psth_hits_vs_misses(obj, spikes, axes=None, preTime=1.55, postTime=4.5,
     for ax,h,m in zip(axes,hitSDFs,missSDFs):
         for s,clr in zip(stimStarts,['0.9']*2+['0.5']*6):
             ax.add_patch(patches.Rectangle([s,0],width=stimdur,height=ymax,color=clr,alpha=0.5))
-        ax.plot(t-preTime, h, 'k', linewidth=2)
-        ax.plot(t-preTime, m, 'b', linewidth=2)
+        ax.plot(t-preTime, h, 'b', linewidth=2)
+        ax.plot(t-preTime, m, 'k', linewidth=2)
         for side in ('right','top'):
             ax.spines[side].set_visible(False)
         ax.tick_params(direction='out',top=False,right=False,labelsize=10)

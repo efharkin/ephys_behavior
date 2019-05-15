@@ -1448,7 +1448,9 @@ from sklearn.ensemble import RandomForestClassifier
 from sklearn.model_selection import train_test_split
 
 obj = b
-ignore = obj.ignore
+onlyHits = False
+ignore = obj.ignore | obj.correctReject | obj.falseAlarm if not onlyHits else ~obj.hit
+
 frameTimes = obj.frameAppearTimes
 trials = obj.trials
 units = obj.units
@@ -1466,7 +1468,7 @@ postTime = 1.5
 sdfs = []
 uids = []
 depths = []
-probes_to_run = ['B']
+probes_to_run = ['D']
 ptCriterion = lambda pt: pt>0
 for pid in probes_to_run:
     for u in probeSync.getOrderedUnits(units[pid]):
@@ -1474,7 +1476,7 @@ for pid in probes_to_run:
         if region not in ('air', 'hipp'):
             if not selectOnRegion or (region is not None and any([r in region for r in regionsToConsider])):
                 spikes = units[pid][u]['times']
-                if np.sum(spikes<changeTimes[-1])<5000 or not ptCriterion(units[pid][u]['peakToTrough']):
+                if np.sum(spikes<obj.lastBehaviorTime)<5000 or not ptCriterion(units[pid][u]['peakToTrough']):
                     continue
                 
                 unit_sdf = []
@@ -1512,6 +1514,14 @@ plt.figure()
 plt.plot(changeFlash.mean(axis=0))
 plt.plot(flashBeforeChange.mean(axis=0))
 plt.plot(flashDiff.mean(axis=0))
+
+cellLogChangeMod = np.log2(flashDiff.max(axis=1)/flashBeforeChange.max(axis=1))           
+#cellLogChangeMod = flashDiff.max(axis=1)/flashBeforeChange.max(axis=1)
+cellLogChangeMean = cellLogChangeMod.mean()
+cellLogChangeSEM = cellLogChangeMod.std()/np.sqrt(flashDiff.shape[0])
+print(cellLogChangeMean)
+print(cellLogChangeSEM)
+
 
 #########################
 #combining across days
@@ -1707,9 +1717,37 @@ depthSortedIndex = np.argsort(allDepths)
 plt.imshow(allDiffs[depthSortedIndex], clim=[0, 3], cmap='plasma', aspect='auto')
 
 dafig, daax = plt.subplots()
+#allDepths = np.concatenate(allDepths)
+#allDiffs = np.concatenate(allDiffs)
 allDepths = allDepths[allDiffs.max(axis=1)<15]
 allDiffs = allDiffs[allDiffs.max(axis=1)<15]
 ddf = pd.DataFrame({'depth': allDepths, 'cmod':allDiffs.max(axis=1)})
 ddf = ddf.sort_values(by=['depth'])
-runningAverage = ddf.rolling(50).mean().values
+runningAverage = ddf.rolling(5).mean().values
 daax.plot(runningAverage[:, 1], runningAverage[:, 0], 'k')    
+
+
+
+
+#compare stuff across first and second recording days
+firstDays = ['03122019_416656', '03262019_417882', '04042019_408528', '04102019']
+secondDays = ['03132019_416656', '03272019_417882', '04052019_408528','04112019']
+firstprobesRecorded = ['ABC', 'ABCEF', 'ABCDEF',  'BCDEF']
+secondprobesRecorded = ['ABCDEF', 'ABCF', 'ABCDEF','BCDEF']
+
+summaryDict = {a:{k:[] for k in ['unitYield', 'FiringRate']} for a in ('first', 'second')}
+for exp1, exp2, probes1, probes2 in zip(firstDays, secondDays, firstprobesRecorded, secondprobesRecorded):
+    obj1 = getData.behaviorEphys('Z:\\' + exp1, probes=probes1)
+    obj1.loadFromRawData()
+    frs = [[len(obj1.units[pid][u]['times'])/obj1.vsyncs[-1] for u in probeSync.getOrderedUnits(obj1.units[pid])] for pid in probes1]
+    summaryDict['first']['unitYield'].append([len(probeSync.getOrderedUnits(obj1.units[pid])) for pid in probes1])    
+    summaryDict['first']['FiringRate'].append(np.concatenate(frs))
+    
+    obj2 = getData.behaviorEphys('Z:\\' + exp2, probes=probes2)
+    obj2.loadFromRawData()
+    summaryDict['second']['unitYield'].append([len(probeSync.getOrderedUnits(obj2.units[pid])) for pid in probes2])
+    frs = [[len(obj2.units[pid][u]['times'])/obj2.vsyncs[-1] for u in probeSync.getOrderedUnits(obj2.units[pid])] for pid in probes1]
+    summaryDict['second']['FiringRate'].append(np.concatenate(frs))
+
+
+

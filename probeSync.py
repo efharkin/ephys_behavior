@@ -40,8 +40,15 @@ def getUnitData(dataDir,syncDataset,probeID, probePXIDict, probeGen = '3b'):
     beFalling = event_times[channel_states<0]/30000.
     be_t, be = ecephys.extract_barcodes_from_times(beRising, beFalling)
     
+    if '0321' in dataDir:
+        be_t = be_t[5:]
+        be = be[5:]
+    
     #Compute time shift between ephys and sync
     shift, p_sampleRate, m_endpoints = ecephys.get_probe_time_offset(bs_t, bs, be_t, be, 0, 30000)
+    
+    if '0321' in dataDir:
+        shift = -3.6950408520530686
     #be_t_shifted = (be_t/(p_sampleRate/30000)) - shift #just to check that the shift and scale are right
     
     #Get unit spike times 
