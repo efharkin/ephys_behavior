@@ -1730,8 +1730,8 @@ daax.plot(runningAverage[:, 1], runningAverage[:, 0], 'k')
 
 
 #compare stuff across first and second recording days
-firstDays = ['03122019_416656', '03262019_417882', '04042019_408528', '04102019']
-secondDays = ['03132019_416656', '03272019_417882', '04052019_408528','04112019']
+firstDays = ['03122019_416656', '03262019_417882', '04042019_408528']
+secondDays = ['03132019_416656', '03272019_417882', '04052019']
 firstprobesRecorded = ['ABC', 'ABCEF', 'ABCDEF',  'BCDEF']
 secondprobesRecorded = ['ABCDEF', 'ABCF', 'ABCDEF','BCDEF']
 
@@ -1739,14 +1739,14 @@ summaryDict = {a:{k:[] for k in ['unitYield', 'FiringRate']} for a in ('first', 
 for exp1, exp2, probes1, probes2 in zip(firstDays, secondDays, firstprobesRecorded, secondprobesRecorded):
     obj1 = getData.behaviorEphys('Z:\\' + exp1, probes=probes1)
     obj1.loadFromRawData()
-    frs = [[len(obj1.units[pid][u]['times'])/obj1.vsyncs[-1] for u in probeSync.getOrderedUnits(obj1.units[pid])] for pid in probes1]
+    frs = [[len(obj1.units[pid][u]['times'])/obj1.vsyncTimes[-1] for u in probeSync.getOrderedUnits(obj1.units[pid])] for pid in probes1]
     summaryDict['first']['unitYield'].append([len(probeSync.getOrderedUnits(obj1.units[pid])) for pid in probes1])    
     summaryDict['first']['FiringRate'].append(np.concatenate(frs))
     
     obj2 = getData.behaviorEphys('Z:\\' + exp2, probes=probes2)
     obj2.loadFromRawData()
     summaryDict['second']['unitYield'].append([len(probeSync.getOrderedUnits(obj2.units[pid])) for pid in probes2])
-    frs = [[len(obj2.units[pid][u]['times'])/obj2.vsyncs[-1] for u in probeSync.getOrderedUnits(obj2.units[pid])] for pid in probes1]
+    frs = [[len(obj2.units[pid][u]['times'])/obj2.vsyncTimes[-1] for u in probeSync.getOrderedUnits(obj2.units[pid])] for pid in probes2]
     summaryDict['second']['FiringRate'].append(np.concatenate(frs))
 
 
