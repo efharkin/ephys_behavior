@@ -3,8 +3,8 @@
 """
 
 import getPickleFiles
-mouseID = '408527'
-limsDir = r'\\allen\programs\braintv\production\visualbehavior\prod0\specimen_759504363'
+mouseID = '422699'
+limsDir = r'\\allen\programs\braintv\production\visualbehavior\prod0\specimen_772644155'
 getPickleFiles.getPickleFiles(mouseID,limsDir)
 
 """

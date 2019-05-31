@@ -12,9 +12,11 @@ import datetime
 import numpy as np
 import pandas as pd
 import scipy
-import matplotlib.pyplot as plt
 from visual_behavior.translator.foraging2 import data_to_change_detection_core
 from visual_behavior.translator.core import create_extended_dataframe
+import matplotlib
+matplotlib.rcParams['pdf.fonttype'] = 42
+import matplotlib.pyplot as plt
 
 
 def calculateHitRate(hits,misses,adjusted=False):
@@ -49,8 +51,13 @@ mouseInfo = (('385533',('09072018','09102018','09112018','09172018')),
              ('417882',('03262019','03272019')),
              ('408528',('04042019','04052019')),
              ('408527',('04102019','04112019')),
+             ('421323',('04252019','04262019')),
+             ('422856',('04302019','05012019')),
+             ('423749',('05162019','05172019')),
+             ('422699',('05222019','05232019')),
             )
 
+unloadablePklFiles = []
 trainingDay = []
 isImages = []
 isRig = []
@@ -64,6 +71,7 @@ imageHitRateEngaged = []
 frameRate = 60.0
 windowFrames = 60*frameRate
 for mouseID,ephysDates in mouseInfo: 
+    print('loading mouse '+mouseID)
     ephysDateTimes = [datetime.datetime.strptime(d,'%m%d%Y') for d in ephysDates] if ephysDates is not None else (None,)
     trainingDate = []
     trainingStage = []
@@ -74,7 +82,8 @@ for mouseID,ephysDates in mouseInfo:
     probEngaged.append([])
     imageHitRate.append([])
     imageHitRateEngaged.append([])
-    for pklFile in  glob.glob(os.path.join(pickleDir,mouseID,'*.pkl')):
+    unloadablePklFiles.append([])
+    for pklFile in glob.glob(os.path.join(pickleDir,mouseID,'*.pkl')):
         try:
             core_data = data_to_change_detection_core(pd.read_pickle(pklFile))
             trials = create_extended_dataframe(
@@ -83,7 +92,7 @@ for mouseID,ephysDates in mouseInfo:
                 licks=core_data['licks'],
                 time=core_data['time'])
         except:
-            print('could not import '+pklFile)
+            unloadablePklFiles[-1].append(pklFile)
             continue
         
         trainingDate.append(datetime.datetime.strptime(os.path.basename(pklFile)[:6],'%y%m%d'))
