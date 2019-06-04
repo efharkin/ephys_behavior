@@ -54,7 +54,7 @@ mouseInfo = (('385533',('09072018','09102018','09112018','09172018')),
              ('421323',('04252019','04262019')),
              ('422856',('04302019','05012019')),
              ('423749',('05162019','05172019')),
-             ('422699',('05222019','05232019')),
+#             ('422699',('05222019','05232019')),
             )
 
 unloadablePklFiles = []
@@ -139,7 +139,7 @@ for mouseID,ephysDates in mouseInfo:
              
     trainingDay.append(np.array([(d-min(trainingDate)).days+1 for d in trainingDate]))
     isImages.append(np.array(['images' in s for s in trainingStage]))
-    isRig.append(np.array(['NP' in r for r in rigID]))
+    isRig.append(np.array([r=='NP3' for r in rigID]))
     isEphys.append(np.array([d in ephysDateTimes for d in trainingDate]))
 
 
