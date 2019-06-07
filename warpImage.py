@@ -33,7 +33,7 @@ def warpImage(refImg,warpImg,refPts,warpPts):
         cv2.fillConvexPoly(mask,refTri.astype(int),1)
         mask = mask.astype(bool)
         warpMatrix = cv2.getAffineTransform(warpTri,refTri)
-        for ch in range(warpImg.shape[3]):
+        for ch in range(newImg.shape[3]):
             warpData = cv2.warpAffine(warpImg[warpSlice[0],warpSlice[1],ch],warpMatrix,refRect[2:],flags=cv2.INTER_LINEAR,borderMode=cv2.BORDER_REFLECT_101)
             newImg[refSlice[0],refSlice[1],ch][mask] = warpData[mask]
     return newImg
