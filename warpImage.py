@@ -10,7 +10,7 @@ import cv2
 
 def warpImage(refImg,warpImg,refPts,warpPts):
     # append boundaryPts to npts x 2 (x,y) float32 point arrays
-    refPts,warpPts = (np.concatenate((pts,getBoundaryPoints(shape[1]/2,shape[0]/2)),axis=0).astype(np.float32) for pts,shape in zip((refPts,warpPts),(refImg,warpImg)))
+    refPts,warpPts = (np.concatenate((pts,getBoundaryPoints(shape[1],shape[0])),axis=0).astype(np.float32) for pts,shape in zip((refPts,warpPts),(refImg,warpImg)))
     
     # get Delaunay triangles as indices of refPts (point1Index,point2Index,point3Index)
     triangles = getDelauneyTriangles(refPts,refImg.shape[1],refImg.shape[0])
