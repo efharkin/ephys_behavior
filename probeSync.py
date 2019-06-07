@@ -6,6 +6,7 @@ Created on Wed Aug 08 13:08:37 2018
 """
 
 from __future__ import division
+from matplotlib import pyplot as plt
 import ecephys
 import pandas as pd
 import numpy as np
@@ -152,8 +153,12 @@ def load_spike_info(spike_data_dir, p_sampleRate, shift):
         temp = units[u]['template'][:, peakChan]
         pt = findPeakToTrough(temp, plot=False)
         units[u]['peakToTrough'] = pt
-        if np.sum(temp<temp.min()*0.1)>30:
+        tempNorm = temp/np.max(np.abs([temp.min(), temp.max()]))
+        units[u]['normTempIntegral'] = tempNorm.sum()
+        if abs(tempNorm.sum())>4:
             units[u]['label'] = 'noise'
+#            plt.figure(u)
+#            plt.plot(temp)
         
     return units
 
