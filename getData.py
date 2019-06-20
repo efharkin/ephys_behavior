@@ -81,7 +81,7 @@ class behaviorEphys():
     def getCCFPositions(self):
         # get unit CCF positions
         self.probeCCFFile = glob.glob(os.path.join(self.dataDir,'probePosCCF*.xlsx'))
-        if len(self.probeCCFFile)>0 and hasattr(self,'entryChannel'):
+        if len(self.probeCCFFile)>0:
             probeCCF = pd.read_excel(self.probeCCFFile[0])
             ccfDir = os.path.dirname(self.dataDir)
             annotationStructures = minidom.parse(os.path.join(ccfDir,'annotationStructures.xml'))
@@ -90,9 +90,10 @@ class behaviorEphys():
             self.probeCCF = {}
             for pid in self.probes_to_analyze:
                 entry,tip = [np.array(probeCCF[pid+' '+loc]) for loc in ('entry','tip')]
+                entryChannel = entry[5]
                 dx,dy,dz = [tip[i]-entry[i] for i in range(3)]
                 trackLength = (dx**2+dy**2+dz**2)**0.5
-                probeLength = tipLength+self.entryChannel[pid]*10 # length of probe in brain
+                probeLength = tipLength+entryChannel*10 # length of probe in brain
                 scaleFactor = trackLength/probeLength
                 shift = entry[3]
                 stretch = entry[4]
@@ -101,6 +102,7 @@ class behaviorEphys():
                 self.probeCCF[pid]['tip'] = tip
                 self.probeCCF[pid]['shift'] = shift
                 self.probeCCF[pid]['stretch'] = stretch
+                self.probeCCF[pid]['entryChannel'] = entryChannel
                 for u in self.units[pid]:
                     distFromTip = tipLength+self.units[pid][u]['position'][1]
                     distFromEntry = probeLength-distFromTip
