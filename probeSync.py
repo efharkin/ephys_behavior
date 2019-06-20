@@ -181,22 +181,21 @@ def getOrderedUnits(units, label=['good']):
     return goodUnits[np.argsort(peakChans)]
     
     
-def getLFPdata(dataDir, pid, syncDataset, probePXIDict, num_channels=384, probeGen = '3b'):
+def getLFPData(dataDir, pid, syncDataset, probePXIDict, probeGen = '3b', num_channels=384):
     
     if probeGen is '3a':
-        lfp_data_dir = os.path.join(probeDir,'continuous\\Neuropix-3a-100.1')
-        lfp_data_file = os.path.join(lfp_data_dir, 'continuous.dat')    
-        
+        lfp_data_dir =  glob.glob(os.path.join(dataDir,'*probe'+pid+'_sorted','continuous','Neuropix-3a-100.1'))[0]
+        events_dir = glob.glob(os.path.join(dataDir,'*probe'+pid+'_sorted','events','Neuropix-3a-100.0','TTL_1'))[0]
     elif probeGen is '3b':
-        eventsDir = os.path.join(dataDir, 'events')
-        probeTTLDir = os.path.join(os.path.join(eventsDir,'Neuropix-PXI-' + probePXIDict[probeID]), 'TTL_1')
-        probeSpikeDir = os.path.join(dataDir, 'Neuropix-PXI-' + probePXIDict[probeID] + '-AP_sortingResults')
+        probeDirName = 'Neuropix-PXI-'+probePXIDict[pid]
+        lfp_data_dir = os.path.join(dataDir,probeDirName+'-LFP')
+        events_dir = os.path.join(dataDir,'events',probeDirName,'TTL_1')
     
-    
+    lfp_data_file = os.path.join(lfp_data_dir, 'continuous.dat') 
         
     if not os.path.exists(lfp_data_file):
         print('Could not find LFP data at ' + lfp_data_file)
-        return
+        return None,None
     
     lfp_data = np.memmap(lfp_data_file, dtype='int16', mode='r')    
     lfp_data_reshape = np.reshape(lfp_data, [int(lfp_data.size/num_channels), -1])
@@ -208,8 +207,8 @@ def getLFPdata(dataDir, pid, syncDataset, probePXIDict, num_channels=384, probeG
     bs_t, bs = ecephys.extract_barcodes_from_times(bRising, bFalling)
     
     #Get barcodes from ephys data
-    channel_states = np.load(os.path.join(probeDir,'events\\Neuropix-3a-100.0\\TTL_1\\channel_states.npy'))
-    event_times = np.load(os.path.join(probeDir,'events\\Neuropix-3a-100.0\\TTL_1\\event_timestamps.npy'))
+    channel_states = np.load(os.path.join(events_dir,'channel_states.npy'))
+    event_times = np.load(os.path.join(events_dir,'event_timestamps.npy'))
     
     beRising = event_times[channel_states>0]/30000.
     beFalling = event_times[channel_states<0]/30000.

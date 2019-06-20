@@ -556,4 +556,22 @@ def plot_saccade_triggered_fr(obj, spikes, axis, preTime=2, postTime=2, sdfSigma
     axis.set_xlabel('Time relative to saccade (s)',fontsize=14)
     axis.set_ylabel('Spike/s',fontsize=14)
     axis.legend((plotlines[0], plotlines[1]), ('temporal', 'nasal'), loc='best', prop={'size':8})
+    
+    
+def plotLFPNoise(obj,agarChRange=None,timeRange=[0,10]):
+    for pid in obj.probes_to_analyze:
+        t = obj.lfp[pid]['time']
+        d = obj.lfp[pid]['data']
+        i = (t>=t[0]+timeRange[0]) & (t<=t[0]+timeRange[1])
+        if agarChRange is None:
+            d = d[i]
+        else:
+            agar = np.median(d[i,agarChRange[0]:agarChRange[1]],axis=1)
+            d = d[i]-agar[:,None]
+        
+        fig = plt.figure()
+        ax = plt.subplot(1,1,1)
+        ax.plot(d.std(axis=0))
+        ax.set_xlabel('Channel')
+        ax.set_ylabel('Noise')
 
