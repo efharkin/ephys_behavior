@@ -11,15 +11,12 @@ from xml.dom import minidom
 import numpy as np
 import pandas as pd
 import fileIO
-import matplotlib.pyplot as plt
-from probeData import formatFigure
 from sync import sync
 import probeSync
 from visual_behavior.translator.core import create_extended_dataframe
 from visual_behavior.translator.foraging2 import data_to_change_detection_core
-from visual_behavior.visualization.extended_trials.daily import make_daily_figure
-import scipy
 from analysis_utils import find_run_transitions
+import analysis_utils
 
 #Parent directory with sorted data, sync and pkl files
 dataDir = 'Z:\\04112019'
@@ -57,18 +54,19 @@ class behaviorEphys():
     def loadFromHDF5(self, filePath=None):
         fileIO.hdf5ToObj(self,filePath)
     
-    def loadFromRawData(self):
-        self.getUnits()
+    def loadFromRawData(self):        
         #self.getLFP()
-        self.getCCFPositions()
         self.getFrameTimes()
         self.getBehaviorData()
         self.getEyeTrackingData()
         self.getRFandFlashStimInfo()
         self.getPassiveStimInfo()
+        self.getUnits()
+        self.getCCFPositions()
         
     def getUnits(self):    
         self.units = {str(pid): probeSync.getUnitData(self.dataDir, self.syncDataset, pid, self.PXIDict, self.probeGen) for pid in self.probes_to_analyze}
+        self.getVisualResponsiveness()
     
     def getLFP(self):
         self.lfp = {str(pid): probeSync.getLFPdata(self.dataDir, pid, self.syncDataset) for pid in self.probes_to_analyze}
@@ -254,7 +252,17 @@ class behaviorEphys():
             self.passiveFrameAppearTimes = self.frameAppearTimes[firstPassiveFrame:]
             
     
-    
+    def getVisualResponsiveness(self):
+        changeTimes = self.frameAppearTimes[np.array(self.trials['change_frame'][~self.ignore]).astype(np.int)]        
+        for pid in self.probes_to_analyze:
+            for u in self.units[pid]:
+                spikes = self.units[pid][u]['times']
+                #find mean response to all flashes
+                p, t = analysis_utils.getSDF(spikes,changeTimes-.25,0.5, sigma=0.01)
+
+                self.units[pid][u]['peakChangeVisualResponse'] = p.max() - p[:250].mean()
+                            
+
     
     #for pid in probeIDs:
     #    plfp = lfp[pid][0]   

@@ -132,36 +132,36 @@ def load_spike_info(spike_data_dir, p_sampleRate, shift):
     
     units = {}
     for u in unit_ids:
-        units[u] = {}
-        units[u]['label'] = cluster_ids[cluster_ids['cluster_id']==u][group].tolist()[0]
+        ukey = str(u)
+        units[ukey] = {}
+        units[ukey]['label'] = cluster_ids[cluster_ids['cluster_id']==u][group].tolist()[0]
         
         unit_idx = np.where(spike_clusters==u)[0]
         unit_sp_times = spike_times[unit_idx]/p_sampleRate - shift
         
-        units[u]['times'] = unit_sp_times
+        units[ukey]['times'] = unit_sp_times
         
         #choose 1000 spikes with replacement, then average their templates together
         chosen_spikes = np.random.choice(unit_idx, 1000)
         chosen_templates = spike_templates[chosen_spikes].flatten()
-        units[u]['template'] = np.mean(templates[chosen_templates], axis=0)
-        units[u]['peakChan'] = np.unravel_index(np.argmin(units[u]['template']), units[u]['template'].shape)[1]
-        units[u]['position'] = channel_positions[units[u]['peakChan']]
-        units[u]['amplitudes'] = amplitudes[unit_idx]
+        units[ukey]['template'] = np.mean(templates[chosen_templates], axis=0)
+        units[ukey]['peakChan'] = np.unravel_index(np.argmin(units[ukey]['template']), units[ukey]['template'].shape)[1]
+        units[ukey]['position'] = channel_positions[units[ukey]['peakChan']]
+        units[ukey]['amplitudes'] = amplitudes[unit_idx]
         
         #check if this unit is noise
-        peakChan = units[u]['peakChan']
-        temp = units[u]['template'][:, peakChan]
+        peakChan = units[ukey]['peakChan']
+        temp = units[ukey]['template'][:, peakChan]
         pt = findPeakToTrough(temp, plot=False)
-        units[u]['peakToTrough'] = pt
+        units[ukey]['peakToTrough'] = pt
         tempNorm = temp/np.max(np.abs([temp.min(), temp.max()]))
-        units[u]['normTempIntegral'] = tempNorm.sum()
+        units[ukey]['normTempIntegral'] = tempNorm.sum()
         if abs(tempNorm.sum())>4:
-            units[u]['label'] = 'noise'
+            units[ukey]['label'] = 'noise'
 #            plt.figure(u)
 #            plt.plot(temp)
         
     return units
-
 
 def getOrderedUnits(units, label=['good']):
     '''Returns unit ids according to sorting label (default is only the 'good'

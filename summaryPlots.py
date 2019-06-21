@@ -165,7 +165,8 @@ def plot_unit_summary(obj, pid, uid, multipageObj=None):
         plot_rf(obj, spikes, rfAxes, resp_latency=0.05)
             
         allflashax = [plt.subplot(gs[i,2:4]) for i in range(9)]
-        plot_psth_all_flashes(obj, spikes, allflashax)
+        sdfs = plot_psth_all_flashes(obj, spikes, allflashax, returnSDFs=True)
+        units[pid][uid]['allFlashPSTH'] = sdfs[-1]
         
         omittedflashax = [plt.subplot(gs[i,4:6]) for i in range(9)]
         plot_psth_omitted_flashes(obj, spikes, omittedflashax)        
@@ -266,7 +267,7 @@ def plot_rf(obj, spikes, axes=None, resp_latency=0.05):
     axes[-1].set_yticks([])
 
 
-def plot_psth_all_flashes(obj, spikes, axes=None, preTime = 0.05, postTime = 0.55, sdfSigma=0.005):
+def plot_psth_all_flashes(obj, spikes, axes=None, preTime = 0.05, postTime = 0.55, sdfSigma=0.005, returnSDFs=False):
     image_flash_times = obj.frameAppearTimes[np.array(obj.core_data['visual_stimuli']['frame'])]
     image_id = np.array(obj.core_data['visual_stimuli']['image_name'])
     
@@ -302,6 +303,9 @@ def plot_psth_all_flashes(obj, spikes, axes=None, preTime = 0.05, postTime = 0.5
         if ax is not axes[-1]:
             ax.set_xticklabels([])
     axes[-1].set_xlabel('Time to flash (s)',fontsize=12)
+    
+    if returnSDFs:
+        return sdfs
 
 def plot_psth_omitted_flashes(obj, spikes, axes=None, preTime = 0.05, postTime = 0.55, sdfSigma=0.005):
     image_flash_times = obj.frameAppearTimes[obj.omittedFlashFrames]
