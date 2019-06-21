@@ -69,24 +69,42 @@ class behaviorEphys():
         self.getVisualResponsiveness()
     
     def getLFP(self):
-        self.lfp = {str(pid): probeSync.getLFPdata(self.dataDir, pid, self.syncDataset) for pid in self.probes_to_analyze}
+        self.lfp = {}
+        for pid in self.probes_to_analyze:
+            self.lfp[pid] = {}
+            lfpData,lfpTimestamps = probeSync.getLFPData(self.dataDir, pid, self.syncDataset, self.PXIDict, self.probeGen)
+            self.lfp[pid]['data'] = lfpData
+            self.lfp[pid]['time'] = lfpTimestamps
     
     def getCCFPositions(self):
         # get unit CCF positions
         self.probeCCFFile = glob.glob(os.path.join(self.dataDir,'probePosCCF*.xlsx'))
         if len(self.probeCCFFile)>0:
             probeCCF = pd.read_excel(self.probeCCFFile[0])
-            ccfDir = '\\\\allen\\programs\\braintv\\workgroups\\nc-ophys\\corbettb\\CCF'            
+            ccfDir = os.path.dirname(self.dataDir)
             annotationStructures = minidom.parse(os.path.join(ccfDir,'annotationStructures.xml'))
             annotationData = nrrd.read(os.path.join(ccfDir,'annotation_25.nrrd'))[0].transpose((1,2,0))
             tipLength = 201
+            self.probeCCF = {}
             for pid in self.probes_to_analyze:
                 entry,tip = [np.array(probeCCF[pid+' '+loc]) for loc in ('entry','tip')]
+                entryChannel = entry[5]
+                dx,dy,dz = [tip[i]-entry[i] for i in range(3)]
+                trackLength = (dx**2+dy**2+dz**2)**0.5
+                probeLength = tipLength+entryChannel*10 # length of probe in brain
+                scaleFactor = trackLength/probeLength
+                shift = entry[3]
+                stretch = entry[4]
+                self.probeCCF[pid] = {}
+                self.probeCCF[pid]['entry'] = entry
+                self.probeCCF[pid]['tip'] = tip
+                self.probeCCF[pid]['shift'] = shift
+                self.probeCCF[pid]['stretch'] = stretch
+                self.probeCCF[pid]['entryChannel'] = entryChannel
                 for u in self.units[pid]:
                     distFromTip = tipLength+self.units[pid][u]['position'][1]
-                    dx,dy,dz = [entry[i]-tip[i] for i in range(3)]
-                    trackLength = (dx**2+dy**2+dz**2)**0.5
-                    self.units[pid][u]['ccf'] = tip+np.array([distFromTip*d/trackLength for d in (dx,dy,dz)])
+                    distFromEntry = probeLength-distFromTip
+                    self.units[pid][u]['ccf'] = entry[:3]+(shift+distFromEntry*scaleFactor*stretch)*np.array([dx,dy,dz])/trackLength
                     self.units[pid][u]['ccfID'] = annotationData[tuple(int(self.units[pid][u]['ccf'][c]/25) for c in (1,0,2))]
                     self.units[pid][u]['ccfRegion'] = None
                     for ind,structID in enumerate(annotationStructures.getElementsByTagName('id')):
@@ -118,8 +136,9 @@ class behaviorEphys():
                     
     def saveCCFPositionsAsArray(self):
         for pid in self.probes_to_analyze:
-            f = os.path.join(self.dataDir,'UnitCCFPositions_probe'+pid+'.npy')
+            f = os.path.join(self.dataDir,'UnitAndTipCCFPositions_probe'+pid+'.npy')
             d = np.array([self.units[pid][u]['ccf'] for u in probeSync.getOrderedUnits(self.units[pid])])
+            d = np.concatenate((d,self.probeCCF[pid]['entry'][None,:3])) # add probe entry point
             d /= 25 # 25 um per ccf voxel
             d += 1 # for ImageGui
             np.save(f,d)
