@@ -107,10 +107,25 @@ class behaviorEphys():
                     self.units[pid][u]['ccf'] = entry[:3]+(shift+distFromEntry*scaleFactor*stretch)*np.array([dx,dy,dz])/trackLength
                     self.units[pid][u]['ccfID'] = annotationData[tuple(int(self.units[pid][u]['ccf'][c]/25) for c in (1,0,2))]
                     self.units[pid][u]['ccfRegion'] = None
+                    
                     for ind,structID in enumerate(annotationStructures.getElementsByTagName('id')):
                         if int(structID.childNodes[0].nodeValue)==self.units[pid][u]['ccfID']:
-                            self.units[pid][u]['ccfRegion'] = annotationStructures.getElementsByTagName('structure')[ind].childNodes[7].childNodes[0].nodeValue[1:-1]
+                            structure = annotationStructures.getElementsByTagName('structure')[ind]
+                            acronym = structure.childNodes[7].childNodes[0].nodeValue[1:-1]
+                            graphOrder = int(structure.childNodes[13].childNodes[0].nodeValue)
+                            self.units[pid][u]['ccfRegion'] = acronym
                             break
+                    
+                    inCortex = False
+                    while graphOrder > 5:
+                        structure = structure.parentNode.parentNode
+                        graphOrder = int(structure.childNodes[13].childNodes[0].nodeValue)
+                    
+                    if 'Isocortex' in structure.childNodes[7].childNodes[0].nodeValue[1:-1]:
+                        inCortex = True
+                    self.units[pid][u]['inCortex'] = inCortex
+                    
+                    
         else:
             for pid in self.probes_to_analyze:
                 for u in self.units[pid]:
