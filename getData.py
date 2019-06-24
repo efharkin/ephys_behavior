@@ -287,14 +287,18 @@ class behaviorEphys():
             
     
     def getVisualResponsiveness(self):
-        changeTimes = self.frameAppearTimes[np.array(self.trials['change_frame'][~self.ignore]).astype(np.int)]        
+        image_flash_times = self.frameAppearTimes[np.array(self.core_data['visual_stimuli']['frame'])]
+        image_id = np.array(self.core_data['visual_stimuli']['image_name'])
+        
+        #take first 50 flashes of each image
+        image_flash_times = np.array([image_flash_times[np.where(image_id==im)[0][:50]] for im in np.unique(image_id)]).flatten()
         for pid in self.probes_to_analyze:
             for u in self.units[pid]:
                 spikes = self.units[pid][u]['times']
                 #find mean response to all flashes
-                p, t = analysis_utils.getSDF(spikes,changeTimes-.25,0.5, sigma=0.01)
+                p, t = analysis_utils.getSDF(spikes,image_flash_times-.25,0.5, sigma=0.01)
 
-                self.units[pid][u]['peakChangeVisualResponse'] = p.max() - p[:250].mean()
+                self.units[pid][u]['peakMeanVisualResponse'] = p.max() - p[:250].mean()
                             
 
     
