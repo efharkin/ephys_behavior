@@ -156,7 +156,14 @@ class behaviorEphys():
             d = np.concatenate((d,self.probeCCF[pid]['entry'][None,:3])).astype(float) # add probe entry point
             d /= 25 # 25 um per ccf voxel
             d += 1 # for ImageGui
+            
+            rf = os.path.join(self.dataDir,'VisualResponsiveness_probe'+pid+'.npy')
+            r = np.array([self.units[pid][u]['peakMeanVisualResponse'] for u in probeSync.getOrderedUnits(self.units[pid])])
+            r = np.append(r,np.median(r)).astype(float) # add probe entry point
+            
             np.save(f,d)
+            np.save(rf, r)
+            
 
                 
     def getFrameTimes(self):
