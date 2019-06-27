@@ -572,10 +572,18 @@ def plotLFPNoise(obj,agarChRange=None,timeRange=[0,10]):
         else:
             agar = np.median(d[i,agarChRange[0]:agarChRange[1]],axis=1)
             d = d[i]-agar[:,None]
+            
+        peakChan = [obj.units[pid][u]['position'][1]/10 for u in probeSync.getOrderedUnits(obj.units[pid])]
+        unitCount,bins = np.histogram(peakChan,range(d.shape[1]+1))
         
         fig = plt.figure()
         ax = plt.subplot(1,1,1)
-        ax.plot(d.std(axis=0))
+        ax2 = ax.twinx()
+        ax2.plot(unitCount,'b')
+        ax2.set_ylabel('Unit Count',color='b')
+        ax.plot(d.std(axis=0),'k')
         ax.set_xlabel('Channel')
         ax.set_ylabel('Noise')
+        
+        
 
