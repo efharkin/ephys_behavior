@@ -153,7 +153,7 @@ class behaviorEphys():
         for pid in self.probes_to_analyze:
             f = os.path.join(self.dataDir,'UnitAndTipCCFPositions_probe'+pid+'.npy')
             d = np.array([self.units[pid][u]['ccf'] for u in probeSync.getOrderedUnits(self.units[pid])])
-            d = np.concatenate((d,self.probeCCF[pid]['entry'][None,:3])) # add probe entry point
+            d = np.concatenate((d,self.probeCCF[pid]['entry'][None,:3])).astype(float) # add probe entry point
             d /= 25 # 25 um per ccf voxel
             d += 1 # for ImageGui
             np.save(f,d)
