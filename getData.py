@@ -107,31 +107,26 @@ class behaviorEphys():
                     self.units[pid][u]['ccf'] = entry[:3]+(shift+distFromEntry*scaleFactor*stretch)*np.array([dx,dy,dz])/trackLength
                     self.units[pid][u]['ccfID'] = annotationData[tuple(int(self.units[pid][u]['ccf'][c]/25) for c in (1,0,2))]
                     self.units[pid][u]['ccfRegion'] = None
-                    
-                    for ind,structID in enumerate(annotationStructures.getElementsByTagName('id')):
-                        if int(structID.childNodes[0].nodeValue)==self.units[pid][u]['ccfID']:
-                            structure = annotationStructures.getElementsByTagName('structure')[ind]
-                            acronym = structure.childNodes[7].childNodes[0].nodeValue[1:-1]
-                            graphOrder = int(structure.childNodes[13].childNodes[0].nodeValue)
-                            self.units[pid][u]['ccfRegion'] = acronym
-                            break
-                    
                     inCortex = False
-                    while graphOrder > 5:
-                        structure = structure.parentNode.parentNode
-                        graphOrder = int(structure.childNodes[13].childNodes[0].nodeValue)
-                    
-                    if 'Isocortex' in structure.childNodes[7].childNodes[0].nodeValue[1:-1]:
-                        inCortex = True
+                    if self.units[pid][u]['ccf'][1] >= 0:
+                        for ind,structID in enumerate(annotationStructures.getElementsByTagName('id')):
+                            if int(structID.childNodes[0].nodeValue)==self.units[pid][u]['ccfID']:
+                                structure = annotationStructures.getElementsByTagName('structure')[ind]
+                                acronym = structure.childNodes[7].childNodes[0].nodeValue[1:-1]
+                                graphOrder = int(structure.childNodes[13].childNodes[0].nodeValue)
+                                self.units[pid][u]['ccfRegion'] = acronym
+                                break
+                        while graphOrder > 5:
+                            structure = structure.parentNode.parentNode
+                            graphOrder = int(structure.childNodes[13].childNodes[0].nodeValue)
+                        if 'Isocortex' in structure.childNodes[7].childNodes[0].nodeValue[1:-1]:
+                            inCortex = True
                     self.units[pid][u]['inCortex'] = inCortex
-                    
-                    
         else:
             for pid in self.probes_to_analyze:
                 for u in self.units[pid]:
                     for key in ('ccf','ccfID','ccfRegion'):
                         self.units[pid][u][key] = None
-    
             if os.path.isfile(os.path.join(os.path.dirname(self.dataDir), 'hippocampusChannels.xlsx')):
                 try:
                     print('assigning hippocampus channels')
@@ -149,11 +144,12 @@ class behaviorEphys():
                     print('could not assign hippocampus channels, sheet name may be wrong')
                     
                     
-    def saveCCFPositionsAsArray(self):
+    def saveCCFPositionsAsArray(self,appendEntry=True):
         for pid in self.probes_to_analyze:
             f = os.path.join(self.dataDir,'UnitAndTipCCFPositions_probe'+pid+'.npy')
-            d = np.array([self.units[pid][u]['ccf'] for u in probeSync.getOrderedUnits(self.units[pid])])
-            d = np.concatenate((d,self.probeCCF[pid]['entry'][None,:3])).astype(float) # add probe entry point
+            d = np.array([self.units[pid][u]['ccf'] for u in probeSync.getOrderedUnits(self.units[pid])]).astype(float)
+            if appendEntry:
+                d = np.concatenate((d,self.probeCCF[pid]['entry'][None,:3])).astype(float) # add probe entry point
             d /= 25 # 25 um per ccf voxel
             d += 1 # for ImageGui
             
