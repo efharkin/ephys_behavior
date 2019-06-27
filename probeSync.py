@@ -214,8 +214,16 @@ def getLFPData(dataDir, pid, syncDataset, probePXIDict, probeGen = '3b', num_cha
     beFalling = event_times[channel_states<0]/30000.
     be_t, be = ecephys.extract_barcodes_from_times(beRising, beFalling)
     
+    if '0321' in dataDir:
+        be_t = be_t[5:]
+        be = be[5:]
+    
     #Compute time shift between ephys and sync
-    shift, p_sampleRate, m_endpoints = ecephys.get_probe_time_offset(bs_t, bs, be_t, be, 0, 30000)    
+    shift, p_sampleRate, m_endpoints = ecephys.get_probe_time_offset(bs_t, bs, be_t, be, 0, 30000)
+    
+    if '0321' in dataDir:
+        shift = -3.6950408520530686    
+    
     
     time_stamps_shifted = (time_stamps/p_sampleRate) - shift
     
