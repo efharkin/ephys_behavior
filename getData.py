@@ -79,7 +79,8 @@ class behaviorEphys():
     def getCCFPositions(self):
         # get unit CCF positions
         self.probeCCFFile = glob.glob(os.path.join(self.dataDir,'probePosCCF*.xlsx'))
-        if len(self.probeCCFFile)>0:
+        #if len(self.probeCCFFile)>0:
+        try:
             probeCCF = pd.read_excel(self.probeCCFFile[0])
             ccfDir = os.path.dirname(self.dataDir)
             annotationStructures = minidom.parse(os.path.join(ccfDir,'annotationStructures.xml'))
@@ -122,7 +123,7 @@ class behaviorEphys():
                         if 'Isocortex' in structure.childNodes[7].childNodes[0].nodeValue[1:-1]:
                             inCortex = True
                     self.units[pid][u]['inCortex'] = inCortex
-        else:
+        except:
             for pid in self.probes_to_analyze:
                 for u in self.units[pid]:
                     for key in ('ccf','ccfID','ccfRegion'):

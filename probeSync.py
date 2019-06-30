@@ -33,9 +33,16 @@ def getUnitData(dataDir,syncDataset,probeID, probePXIDict, probeGen = '3b'):
     bs_t, bs = ecephys.extract_barcodes_from_times(bRising, bFalling)
     
     #Get barcodes from ephys data
-    
-    channel_states = np.load(os.path.join(probeTTLDir, 'channel_states.npy'))
-    event_times = np.load(os.path.join(probeTTLDir, 'event_timestamps.npy'))
+    if '0312' in dataDir and 'slot3' in probeTTLDir: 
+        #files on slot3 for this day saved extra bytes at beginning, must skip them to get the right time stamps
+        channel_states = np.load(r"Z:\03122019_416656\events\Neuropix-PXI-slot2-probe1\TTL_1\channel_states.npy")
+        event_times_file = open(os.path.join(probeTTLDir, 'event_timestamps.npy'), 'rb')
+        event_times_file.seek(8*22+1)
+        event_times = np.fromfile(event_times_file, dtype='<u8')[:channel_states.size]
+            
+    else:   
+         channel_states = np.load(os.path.join(probeTTLDir, 'channel_states.npy'))
+         event_times = np.load(os.path.join(probeTTLDir, 'event_timestamps.npy'))
     
     beRising = event_times[channel_states>0]/30000.
     beFalling = event_times[channel_states<0]/30000.
@@ -44,7 +51,7 @@ def getUnitData(dataDir,syncDataset,probeID, probePXIDict, probeGen = '3b'):
     if '0321' in dataDir:
         be_t = be_t[5:]
         be = be[5:]
-    
+        
     #Compute time shift between ephys and sync
     shift, p_sampleRate, m_endpoints = ecephys.get_probe_time_offset(bs_t, bs, be_t, be, 0, 30000)
     
@@ -207,8 +214,17 @@ def getLFPData(dataDir, pid, syncDataset, probePXIDict, probeGen = '3b', num_cha
     bs_t, bs = ecephys.extract_barcodes_from_times(bRising, bFalling)
     
     #Get barcodes from ephys data
-    channel_states = np.load(os.path.join(events_dir,'channel_states.npy'))
-    event_times = np.load(os.path.join(events_dir,'event_timestamps.npy'))
+    #Get barcodes from ephys data
+    if '0312' in dataDir and 'slot3' in events_dir: 
+        #files on slot3 for this day saved extra bytes at beginning, must skip them to get the right time stamps
+        channel_states = np.load(r"Z:\03122019_416656\events\Neuropix-PXI-slot2-probe1\TTL_1\channel_states.npy")
+        event_times_file = open(os.path.join(events_dir, 'event_timestamps.npy'), 'rb')
+        event_times_file.seek(8*22+1)
+        event_times = np.fromfile(event_times_file, dtype='<u8')[:channel_states.size]
+            
+    else:   
+         channel_states = np.load(os.path.join(events_dir, 'channel_states.npy'))
+         event_times = np.load(os.path.join(events_dir, 'event_timestamps.npy'))
     
     beRising = event_times[channel_states>0]/30000.
     beFalling = event_times[channel_states<0]/30000.
