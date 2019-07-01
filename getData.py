@@ -53,6 +53,8 @@ class behaviorEphys():
     
     def loadFromHDF5(self, filePath=None):
         fileIO.hdf5ToObj(self,filePath)
+        self.syncDataset = sync.Dataset(self.sync_file)
+        self.getBehaviorData()
     
     def loadFromRawData(self):        
         #self.getLFP()
@@ -79,7 +81,8 @@ class behaviorEphys():
     def getCCFPositions(self):
         # get unit CCF positions
         self.probeCCFFile = glob.glob(os.path.join(self.dataDir,'probePosCCF*.xlsx'))
-        if len(self.probeCCFFile)>0:
+        #if len(self.probeCCFFile)>0:
+        try:
             probeCCF = pd.read_excel(self.probeCCFFile[0])
             ccfDir = os.path.dirname(self.dataDir)
             annotationStructures = minidom.parse(os.path.join(ccfDir,'annotationStructures.xml'))
@@ -101,6 +104,7 @@ class behaviorEphys():
                 self.probeCCF[pid]['shift'] = shift
                 self.probeCCF[pid]['stretch'] = stretch
                 self.probeCCF[pid]['entryChannel'] = entryChannel
+                self.probeCCF[pid]['ISIRegion'] = probeCCF[pid+' entry']['ISIRegion']
                 for u in self.units[pid]:
                     distFromTip = tipLength+self.units[pid][u]['position'][1]
                     distFromEntry = probeLength-distFromTip
@@ -122,7 +126,8 @@ class behaviorEphys():
                         if 'Isocortex' in structure.childNodes[7].childNodes[0].nodeValue[1:-1]:
                             inCortex = True
                     self.units[pid][u]['inCortex'] = inCortex
-        else:
+                    #self.units[pid][u]['ISIRegion'] = self.probeCCF[pid]['ISIRegion'] if inCortex else 'None'
+        except:
             for pid in self.probes_to_analyze:
                 for u in self.units[pid]:
                     for key in ('ccf','ccfID','ccfRegion'):
@@ -305,7 +310,23 @@ class behaviorEphys():
                 self.units[pid][u]['peakMeanVisualResponse'] = p.max() - p[:250].mean()
                             
 
-    
+    def getUnitsByArea(self, area, cortex=True):
+        pids = []
+        us = []
+        for pid in self.probes_to_analyze:
+            for u in probeSync.getOrderedUnits(self.units[pid]):
+                
+                if cortex:
+                   if self.units[pid][u]['inCortex'] and area in self.probeCCF[pid]['ISIRegion']:
+                       pids.append(pid)
+                       us.append(u)
+                else:
+                    if area in self.units[pid][u]['ccfRegion']:
+                        pids.append(pid)
+                        us.append(u)
+        return np.array(pids), np.array(us)
+            
+        
     #for pid in probeIDs:
     #    plfp = lfp[pid][0]   
     #    gammapower = []
