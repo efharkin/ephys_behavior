@@ -190,10 +190,10 @@ def getOrderedUnits(units, label=['good']):
     
 def getLFPData(dataDir, pid, syncDataset, probePXIDict, probeGen = '3b', num_channels=384):
     
-    if probeGen is '3a':
+    if '3a' in probeGen:
         lfp_data_dir =  glob.glob(os.path.join(dataDir,'*probe'+pid+'_sorted','continuous','Neuropix-3a-100.1'))[0]
         events_dir = glob.glob(os.path.join(dataDir,'*probe'+pid+'_sorted','events','Neuropix-3a-100.0','TTL_1'))[0]
-    elif probeGen is '3b':
+    elif '3b' in probeGen:
         probeDirName = 'Neuropix-PXI-'+probePXIDict[pid]
         lfp_data_dir = os.path.join(dataDir,probeDirName+'-LFP')
         events_dir = os.path.join(dataDir,'events',probeDirName,'TTL_1')
