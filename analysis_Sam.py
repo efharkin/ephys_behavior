@@ -563,6 +563,102 @@ for img in imageNames:
 
 
 
+#############################
+
+import os
+import getData
+import probeSync
+import analysis_utils
+import numpy as np
+import matplotlib.pyplot as plt
+
+
+baseDir = 'Z:\\'
+localDir = r'C:\Users\svc_ccg\Desktop\Analysis\Probe'
+
+mouseInfo = (('385533',('09072018','09102018','09112018','09172018'),()),
+             ('390339',('09192018','09202018','09212018'),()),
+             ('394873',('10042018','10052018'),()),
+             ('403472',('10312018','11012018'),()),
+             ('403468',('11142018','11152018'),()),
+             ('412624',('11292018','11302018'),()),
+             ('416656',('03122019','03132019','03142019'),('ABCDEF',)*3),
+             ('409096',('03212019',),('ABCD',)),
+             ('417882',('03262019','03272019'),('ABCEF','ABCF')),
+             ('408528',('04042019','04052019'),('ABCDEF',)*2),
+             ('408527',('04102019','04112019'),('BCDEF',)*2),
+             ('421323',('04252019','04262019'),('ABCDEF',)*2),
+             ('422856',('04302019','05012019'),('ABCDEF','ABCF')),
+             ('423749',('05162019','05172019'),('ABCDEF',)*2),
+             ('422699',('05222019','05232019'),('ABCDEF',)*2),
+            )
+
+
+for mouseID,ephysDates,probeIDs in [mouseInfo[9]]:
+    for date,probes in zip(ephysDates,probeIDs):
+        expName = date+'_'+mouseID
+        print(expName)
+        dataDir = baseDir+expName
+        obj = getData.behaviorEphys(dataDir,probes,probeGen='3b')
+        hdf5Dir = os.path.join(localDir,expName+'.hdf5')
+        
+        # load and save data
+#        obj.loadFromRawData()
+#        obj.saveHDF5(hdf5Dir)
+        
+        # or fetch and analyze data
+        obj.loadFromHDF5(hdf5Dir)
+        
+        sdfs = getChangeSDFs(obj)
+        plotChangeSDFs(obj,sdfs)
+        break
+        
+
+def getChangeSDFs(obj):
+    
+    sdfSigma = 0.001
+    preTime = 1.0
+    postTime = 0.75
+    
+    sdfs = {probe: {state: {resp: [] for resp in ('hit','miss')} for state in ('active','passive')} for probe in obj.probes_to_analyze}
+    
+    for probe in obj.probes_to_analyze:
+        units = probeSync.getOrderedUnits(obj.units[probe])
+        for state in sdfs[probe]:
+            if state=='active' or len(obj.passive_pickle_file)>0:
+                for resp in (sdfs[probe][state]):
+                    selectedTrials = getattr(obj,resp) & (~obj.ignore)
+                    changeFrames = np.array(obj.trials['change_frame'][selectedTrials]).astype(int)
+                    changeTimes = obj.frameAppearTimes[changeFrames] if state=='active' else obj.passiveFrameAppearTimes[changeFrames]
+                    for u in units:
+                        spikes = obj.units[probe][u]['times']
+                        s,t = analysis_utils.getSDF(spikes,changeTimes-preTime,preTime+postTime,sigma=sdfSigma)
+                        sdfs[probe][state][resp].append(s)                    
+    return sdfs
+
+
+def plotChangeSDFs(obj,sdfs):
+    
+    for probe in sdfs:
+        units = probeSync.getOrderedUnits(obj.units[probe])
+        regions = []
+        for u in units:
+            r = obj.probeCCF[probe]['ISIRegion'] if obj.units[probe][u]['inCortex'] else obj.units[probe][u]['ccfRegion']
+            regions.append(r)
+            
+        for region in set(regions):
+            fig = plt.figure()
+            ax = plt.subplot(1,1,1)
+            for state,clr in zip(('active','passive'),'gm'):
+                for resp in ('hit',):
+                    regionSDFs  = [s for s,r in zip(sdfs[probe][state][resp],regions) if r==region]
+                    if state=='active' and resp=='hit':
+                        n = len(regionSDFs)
+                    ax.plot(np.mean(regionSDFs,axis=0),clr)
+            ax.set_xlabel('Time (ms)')
+            ax.set_ylabel('Spikes/s')
+            ax.set_title(obj.experimentDate+' probe'+probe+' '+region+' n='+str(n))
+
 
 
 
