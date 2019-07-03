@@ -31,8 +31,9 @@ class behaviorEphys():
             self.dataDir = dataDir
         else:
             self.dataDir = baseDir
-        self.sync_file = glob.glob(os.path.join(self.dataDir, '*.h5'))[0]
-        self.syncDataset = sync.Dataset(self.sync_file)
+        sync_file = glob.glob(os.path.join(self.dataDir, '*.h5'))
+        self.sync_file = sync_file[0] if len(sync_file)>0 else None
+        self.syncDataset = sync.Dataset(self.sync_file) if self.sync_file is not None else None
         if probes is None:
             self.probes_to_analyze = probeIDs
         else:
@@ -317,11 +318,11 @@ class behaviorEphys():
             for u in probeSync.getOrderedUnits(self.units[pid]):
                 
                 if cortex:
-                   if self.units[pid][u]['inCortex'] and area in self.probeCCF[pid]['ISIRegion']:
+                   if self.units[pid][u]['inCortex'] and area==self.probeCCF[pid]['ISIRegion']:
                        pids.append(pid)
                        us.append(u)
                 else:
-                    if area in self.units[pid][u]['ccfRegion']:
+                    if area==self.units[pid][u]['ccfRegion']:
                         pids.append(pid)
                         us.append(u)
         return np.array(pids), np.array(us)

@@ -1441,6 +1441,7 @@ else:
 
 
 ############
+#CHANGE MODULATION
 #cluster units based on response to change
 ############
 import clust
@@ -1468,10 +1469,10 @@ postTime = 1.5
 sdfs = []
 uids = []
 depths = []
-probes_to_run = ['D']
+probes_to_run = ['A']
 ptCriterion = lambda pt: pt>0
 for pid in probes_to_run:
-    for u in probeSync.getOrderedUnits(units[pid]):
+    for u in probeSync.getOrderedUnits(units[pid])[136:]:
         region = units[pid][u]['ccfRegion']
         if region not in ('air', 'hipp'):
             if not selectOnRegion or (region is not None and any([r in region for r in regionsToConsider])):
