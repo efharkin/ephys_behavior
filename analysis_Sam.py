@@ -576,13 +576,7 @@ import matplotlib.pyplot as plt
 baseDir = 'Z:\\'
 localDir = r'C:\Users\svc_ccg\Desktop\Analysis\Probe'
 
-mouseInfo = (('385533',('09072018','09102018','09112018','09172018'),()),
-             ('390339',('09192018','09202018','09212018'),()),
-             ('394873',('10042018','10052018'),()),
-             ('403472',('10312018','11012018'),()),
-             ('403468',('11142018','11152018'),()),
-             ('412624',('11292018','11302018'),()),
-             ('416656',('03122019','03132019','03142019'),('ABCDEF',)*3),
+mouseInfo = (
              ('409096',('03212019',),('ABCD',)),
              ('417882',('03262019','03272019'),('ABCEF','ABCF')),
              ('408528',('04042019','04052019'),('ABCDEF',)*2),
@@ -590,11 +584,11 @@ mouseInfo = (('385533',('09072018','09102018','09112018','09172018'),()),
              ('421323',('04252019','04262019'),('ABCDEF',)*2),
              ('422856',('04302019','05012019'),('ABCDEF','ABCF')),
              ('423749',('05162019','05172019'),('ABCDEF',)*2),
-             ('422699',('05222019','05232019'),('ABCDEF',)*2),
             )
 
 
-for mouseID,ephysDates,probeIDs in [mouseInfo[9]]:
+data = {}
+for mouseID,ephysDates,probeIDs in mouseInfo:
     for date,probes in zip(ephysDates,probeIDs):
         expName = date+'_'+mouseID
         print(expName)
@@ -609,9 +603,9 @@ for mouseID,ephysDates,probeIDs in [mouseInfo[9]]:
         # or fetch and analyze data
         obj.loadFromHDF5(hdf5Dir)
         
-        sdfs = getChangeSDFs(obj)
-        plotChangeSDFs(obj,sdfs)
-        break
+        data[expName] = {}
+        data[expName]['sdfs'] = getChangeSDFs(obj)
+        data[expName]['regions'] = getUnitRegions(obj)
         
 
 def getChangeSDFs(obj):
@@ -637,34 +631,58 @@ def getChangeSDFs(obj):
     return sdfs
 
 
-def plotChangeSDFs(obj,sdfs):
-    
-    for probe in sdfs:
+def getUnitRegions(obj):
+    regions = {}
+    for probe in obj.probes_to_analyze:
+        regions[probe] = []
         units = probeSync.getOrderedUnits(obj.units[probe])
-        regions = []
         for u in units:
             r = obj.probeCCF[probe]['ISIRegion'] if obj.units[probe][u]['inCortex'] else obj.units[probe][u]['ccfRegion']
-            regions.append(r)
+            regions[probe].append(r)
+    return regions
+
+
+
             
-        for region in set(regions):
-            fig = plt.figure()
-            ax = plt.subplot(1,1,1)
-            for state,clr in zip(('active','passive'),'gm'):
-                for resp in ('hit',):
-                    regionSDFs  = [s for s,r in zip(sdfs[probe][state][resp],regions) if r==region]
-                    if state=='active' and resp=='hit':
-                        n = len(regionSDFs)
-                    ax.plot(np.mean(regionSDFs,axis=0),clr)
-            ax.set_xlabel('Time (ms)')
-            ax.set_ylabel('Spikes/s')
-            ax.set_title(obj.experimentDate+' probe'+probe+' '+region+' n='+str(n))
+regionNames = sorted(list(set([r for exp in data for probe in data[exp]['regions'] for r in data[exp]['regions'][probe]])))
+nUnits = []
+fig1 = plt.figure()
+ax1 = fig1.add_subplot(2,1,1)
+ax2 = fig1.add_subplot(2,1,2)
+ax1.plot([0,len(regionNames)],[0,0],'k--')
+for ind,region in enumerate(regionNames):
+    fig = plt.figure()
+    ax = fig.add_subplot(1,1,1)
+    for state,clr in zip(('active','passive'),[[1,0,0],[0,0,1]]):
+        for resp in ('hit','miss'):
+            regionSDFs = np.array([s for exp in data for probe in data[exp]['sdfs'] for s,r in zip(data[exp]['sdfs'][probe][state][resp],data[exp]['regions'][probe]) if r==region])
+            if len(regionSDFs)>0:
+                regionSDFs -= regionSDFs[:,750:1000].mean(axis=1)[:,None]
+                preSDFs = regionSDFs[:,250:750]
+                postSDFs = regionSDFs[:,1000:1500]
+                diff = postSDFs-preSDFs
+                changeMod = np.log2(diff.max(axis=1)/preSDFs.max(axis=1))
+                changeModTime = np.argmax(diff,axis=1)
+                if state=='active' and resp=='hit':
+                    nUnits.append(len(regionSDFs))
+                    
+                c = clr if resp=='hit' else np.array(clr)+[0,1,0]
+                ax.plot(regionSDFs.mean(axis=0),color=c)
+                
+                ax1.plot(ind,np.nanmedian(changeMod),'o',color=c)
+                ax2.plot(ind,np.median(changeModTime),'o',color=c)
+                
+    ax.set_xlabel('Time (ms)')
+    ax.set_ylabel('Spikes/s')
+    ax.set_title(obj.experimentDate+' '+region+' n='+str(nUnits[-1]))
 
-
-
-
-
-
-
+for a in (ax1,ax2):
+    a.set_xlim([-1,len(regionNames)])
+    a.set_xticks(np.arange(len(regionNames)))
+ax1.set_xticklabels(regionNames,rotation=90)
+ax2.set_xticklabels([r+' (n='+str(n)+')' for r,n in zip(regionNames,nUnits)],rotation=90)
+ax1.set_ylabel('Change Mod')
+ax2.set_ylabel('Change Mod Time (ms)')
 
 
 
