@@ -574,6 +574,45 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 
+def getChangeSDFs(obj,sdfSigma=0.001):
+    
+    preTime = 0.25
+    postTime = 0.75
+    
+    changeFrames = np.array(obj.trials['change_frame']).astype(int)+1 #add one to correct for change frame indexing problem
+    flashFrames = np.array(obj.core_data['visual_stimuli']['frame'])
+    
+    sdfs = {probe: {state: {resp: {epoch: [] for epoch in ('change','preChange')} for resp in ('hit','miss')} for state in ('active','passive')} for probe in obj.probes_to_analyze}
+    
+    for probe in obj.probes_to_analyze:
+        units = probeSync.getOrderedUnits(obj.units[probe])
+        for state in sdfs[probe]:
+            if state=='active' or len(obj.passive_pickle_file)>0:
+                for resp in (sdfs[probe][state]):
+                    trials = getattr(obj,resp) & (~obj.ignore)
+                    frameTimes =obj.frameAppearTimes if state=='active' else obj.passiveFrameAppearTimes
+                    changeTimes = frameTimes[changeFrames[trials]]
+                    flashTimes = frameTimes[flashFrames]
+                    preChangeTimes = flashTimes[np.searchsorted(flashTimes,changeTimes)-1]
+                    for u in units:
+                        spikes = obj.units[probe][u]['times']
+                        for epoch,startTimes in zip(('change','preChange'),(changeTimes,preChangeTimes)):
+                            s = analysis_utils.getSDF(spikes,startTimes-preTime,preTime+postTime,sigma=sdfSigma)[0]
+                            sdfs[probe][state][resp][epoch].append(s)                    
+    return sdfs
+
+
+def getUnitRegions(obj):
+    regions = {}
+    for probe in obj.probes_to_analyze:
+        regions[probe] = []
+        units = probeSync.getOrderedUnits(obj.units[probe])
+        for u in units:
+            r = obj.probeCCF[probe]['ISIRegion'] if obj.units[probe][u]['inCortex'] else obj.units[probe][u]['ccfRegion']
+            regions[probe].append(r)
+    return regions
+
+
 baseDir = 'Z:\\'
 localDir = r'C:\Users\svc_ccg\Desktop\Analysis\Probe'
 
@@ -588,7 +627,7 @@ mouseInfo = (
             )
 
 
-data = {}
+alldata = {}
 for mouseID,ephysDates,probeIDs in mouseInfo:
     for date,probes in zip(ephysDates,probeIDs):
         expName = date+'_'+mouseID
@@ -604,57 +643,23 @@ for mouseID,ephysDates,probeIDs in mouseInfo:
         # or fetch and analyze data
         obj.loadFromHDF5(hdf5Dir)
         
-        data[expName] = {}
-        data[expName]['sdfs'] = getChangeSDFs(obj,0.002)
-        data[expName]['regions'] = getUnitRegions(obj)
+        alldata[expName] = {}
+        alldata[expName]['sdfs'] = getChangeSDFs(obj)
+        alldata[expName]['regions'] = getUnitRegions(obj)
         
 
-def getChangeSDFs(obj,sdfSigma=0.001):
-    
-    preTime = 1.0
-    postTime = 0.75
-    
-    sdfs = {probe: {state: {resp: [] for resp in ('hit','miss')} for state in ('active','passive')} for probe in obj.probes_to_analyze}
-    
-    for probe in obj.probes_to_analyze:
-        units = probeSync.getOrderedUnits(obj.units[probe])
-        for state in sdfs[probe]:
-            if state=='active' or len(obj.passive_pickle_file)>0:
-                for resp in (sdfs[probe][state]):
-                    selectedTrials = getattr(obj,resp) & (~obj.ignore)
-                    changeFrames = np.array(obj.trials['change_frame'][selectedTrials]).astype(int)
-                    changeTimes = obj.frameAppearTimes[changeFrames] if state=='active' else obj.passiveFrameAppearTimes[changeFrames]
-                    for u in units:
-                        spikes = obj.units[probe][u]['times']
-                        s,t = analysis_utils.getSDF(spikes,changeTimes-preTime,preTime+postTime,sigma=sdfSigma)
-                        sdfs[probe][state][resp].append(s)                    
-    return sdfs
 
-
-def getUnitRegions(obj):
-    regions = {}
-    for probe in obj.probes_to_analyze:
-        regions[probe] = []
-        units = probeSync.getOrderedUnits(obj.units[probe])
-        for u in units:
-            r = obj.probeCCF[probe]['ISIRegion'] if obj.units[probe][u]['inCortex'] else obj.units[probe][u]['ccfRegion']
-            regions[probe].append(r)
-    return regions
-
-
-def findLatency(signal,noise,thresh=3,minPtsAbove=10):
-    ptsAbove = np.where(np.correlate(signal>noise.std()*thresh,np.ones(minPtsAbove),mode='valid')==minPtsAbove)[0]
+def findLatency(data,baseWin,respWin,thresh=3,minPtsAbove=10):
+    ptsAbove = np.where(np.correlate(data[respWin]>data[baseWin].std()*thresh,np.ones(minPtsAbove),mode='valid')==minPtsAbove)[0]
     latency = ptsAbove[0] if len(ptsAbove)>0 else np.nan
     return latency
 
 
-def calcChangeMod(data,preChangeWin,changeWin,baseWin):
-    preChange = data[:,preChangeWin]
-    postChange = data[:,changeWin]
-    changeMod = np.log2((postChange-preChange).max(axis=1)/preChange.max(axis=1))
-    latency = findLatency((postChange-preChange).mean(axis=0),data[:,baseWin].mean(axis=0))
-    return changeMod,latency
-
+def calcChangeMod(preChangeSDFs,changeSDFs,baseWin,respWin):
+    diff = changeSDFs-preChangeSDFs
+    changeMod = np.log2(diff[respWin].max(axis=1)/preChangeSDFs[respWin].max(axis=1))
+    changeLat = findLatency(diff.mean(axis=0),baseWin,respWin)
+    return changeMod, changeLat
 
 
 Adays = ('04042019','04102019','04252019','04302019','05162019')
@@ -664,9 +669,15 @@ data = dict(alldata)
 for key in dict(data):
     if key[:8] not in Adays+Bdays:
         del data[key]
+        
+baseWin = slice(0,250)
+respWin = slice(250,500)
 
-activeSDFs,passiveSDFs = [np.array([s for exp in data for probe in data[exp]['sdfs'] for s in data[exp]['sdfs'][probe][state]['hit']]) for state in ('active','passive')]
-regions = np.array([r for exp in data for probe in data[exp]['regions'] for r in data[exp]['regions'][probe]])           
+active,passive = [[np.array([s for exp in data for probe in data[exp]['sdfs'] for s in data[exp]['sdfs'][probe][state]['hit'][epoch]]) for state in ('active','passive')] for epoch in ('preChange','change')]
+activePre,activeChange,passivePre,passiveChange = [sdfs-sdfs[:,baseWin].mean(axis=1)[:,None] for sdfs in active+passive]
+hasResp = activeChange[:,respWin].max(axis=1) > 5*activeChange[:,baseWin].std(axis=1)
+
+regions = np.array([r for exp in data for probe in data[exp]['regions'] for r in data[exp]['regions'][probe]])    
 #regionNames = sorted(list(set(regions)))
 regionNames = (
                ('V1',('VISp',)),
@@ -682,36 +693,36 @@ regionNames = (
                ('hipp',('CA1','CA3','DG-mo','DG-po','DG-sg','HPF'))
               )
 
-baseWin = slice(750,1000)
-changeWin = slice(1000,1250)
-preChangeWin = slice(250,500)
-
 nUnits = []
 fig1 = plt.figure()
 ax1 = fig1.add_subplot(2,1,1)
 ax2 = fig1.add_subplot(2,1,2)
 ax1.plot([0,len(regionNames)],[0,0],'k--')
 for ind,(region,regionLabels) in enumerate(regionNames):
-    fig = plt.figure()
-    ax = fig.add_subplot(1,1,1)
-    inRegion = np.in1d(regions,regionLabels)
-    active,passive = [sdfs[inRegion]-sdfs[inRegion,baseWin].mean(axis=1)[:,None] for sdfs in (activeSDFs,passiveSDFs)]
-    hasResp = active[:,changeWin].max(axis=1) > 5*active[:,baseWin].std(axis=1)
-    nUnits.append(hasResp.sum())
+    inRegion = np.in1d(regions,regionLabels) & hasResp
+    nUnits.append(inRegion.sum())
     
-    (activeChangeMod,activeChangeLat),(passiveChangeMod,passiveChangeLat) = [calcChangeMod(sdfs[hasResp],preChangeWin,changeWin,baseWin) for sdfs in (active,passive)]
+    (activeChangeMod,activeChangeLat),(passiveChangeMod,passiveChangeLat) = [calcChangeMod(pre[inRegion],change[inRegion],baseWin,respWin) for pre,change in zip((activePre,passivePre),(activeChange,passiveChange))]
     
-    activeMean= active[hasResp].mean(axis=0)
-    respLatency = findLatency(activeMean[changeWin],activeMean[baseWin])
+    activeLat,passiveLat = [findLatency(sdfs[inRegion].mean(axis=0),baseWin,respWin) for sdfs in (activeChange,passiveChange)]
     
     ax1.plot(ind,np.nanmedian(activeChangeMod),'ro')
     ax1.plot(ind,np.nanmedian(passiveChangeMod),'bo')
-    ax2.plot(ind,respLatency,'o',mec='k',mfc='none')
-    ax2.plot(ind,activeChangeLat,'o',mec='r',mfc='none')
+    ax2.plot(ind,activeLat,'o',mec='r',mfc='none')
+    ax2.plot(ind,passiveLat,'o',mec='b',mfc='none')
+    ax2.plot(ind,activeChangeLat,'o',mec='r',mfc='r')
+    ax2.plot(ind,passiveChangeLat,'o',mec='b',mfc='b')
     
-    ax.plot(activeMean,'r')
-    ax.plot(passive[hasResp].mean(axis=0),'b')
-    ax.plot((active-passive)[hasResp].mean(axis=0),'k')
+    fig = plt.figure()
+    ax = fig.add_subplot(2,1,1)
+    ax.plot(activeChange[inRegion].mean(axis=0),'r')
+    ax.plot(passiveChange[inRegion].mean(axis=0),'b')
+    ax.set_ylabel('Spikes/s')
+    ax.set_title(region+' n='+str(nUnits[-1]))
+    
+    ax = fig.add_subplot(2,1,2)
+    ax.plot((activeChange-activePre)[inRegion].mean(axis=0),'r')
+    ax.plot((passiveChange-passivePre)[inRegion].mean(axis=0),'b')
     ax.set_xlabel('Time (ms)')
     ax.set_ylabel('Spikes/s')
     ax.set_title(region+' n='+str(nUnits[-1]))
@@ -725,6 +736,17 @@ ax1.set_ylabel('Change Mod')
 ax2.set_ylabel('Latency (ms)')
 
 
+
+
+from sklearn.ensemble import RandomForestClassifier
+from sklearn.cross_validation import cross_val_score
+
+
+model = RandomForestRegressor(n_estimators=100)
+X = np.concatenate([alldata['04042019_408528']['A']['active']['hit'][epoch] for epoch in ('change','preChange')])
+y = np.zeros(X.shape[0])
+y[:int(X.shape[0]/2)] = 1
+score = cross_val_score(model,X,y,cv=2)
 
 
 
