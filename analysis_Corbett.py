@@ -19,6 +19,8 @@ import clust
 import matplotlib.gridspec as gridspec
 from matplotlib.backends.backend_pdf import PdfPages
 from analysis_utils import *
+import getData
+
 
 probes_to_run = ('A', 'B', 'C')
 
@@ -1731,24 +1733,42 @@ daax.plot(runningAverage[:, 1], runningAverage[:, 0], 'k')
 
 
 #compare stuff across first and second recording days
-firstDays = ['03122019_416656', '03262019_417882', '04042019_408528']
-secondDays = ['03132019_416656', '03272019_417882', '04052019']
-firstprobesRecorded = ['ABC', 'ABCEF', 'ABCDEF',  'BCDEF']
-secondprobesRecorded = ['ABCDEF', 'ABCF', 'ABCDEF','BCDEF']
+firstDayFiles = [r"C:\Users\svc_ccg\Desktop\Data\analysis\03262019_417882.hdf5", r"C:\Users\svc_ccg\Desktop\Data\analysis\04042019_408528.hdf5", 
+                 r"C:\Users\svc_ccg\Desktop\Data\analysis\04102019_408527.hdf5", r"C:\Users\svc_ccg\Desktop\Data\analysis\04252019_421323.hdf5",
+                 r"C:\Users\svc_ccg\Desktop\Data\analysis\04302019_422856.hdf5", r"C:\Users\svc_ccg\Desktop\Data\analysis\05162019_423749.hdf5"]
+
+secondDayFiles = [r"C:\Users\svc_ccg\Desktop\Data\analysis\03272019_417882.hdf5", r"C:\Users\svc_ccg\Desktop\Data\analysis\04052019_408528.hdf5",
+                  r"C:\Users\svc_ccg\Desktop\Data\analysis\04112019_408527.hdf5", r"C:\Users\svc_ccg\Desktop\Data\analysis\04262019_421323.hdf5",
+                  r"C:\Users\svc_ccg\Desktop\Data\analysis\05012019_422856.hdf5", r"C:\Users\svc_ccg\Desktop\Data\analysis\05172019_423749.hdf5"]
+
 
 summaryDict = {a:{k:[] for k in ['unitYield', 'FiringRate']} for a in ('first', 'second')}
-for exp1, exp2, probes1, probes2 in zip(firstDays, secondDays, firstprobesRecorded, secondprobesRecorded):
-    obj1 = getData.behaviorEphys('Z:\\' + exp1, probes=probes1)
-    obj1.loadFromRawData()
-    frs = [[len(obj1.units[pid][u]['times'])/obj1.vsyncTimes[-1] for u in probeSync.getOrderedUnits(obj1.units[pid])] for pid in probes1]
-    summaryDict['first']['unitYield'].append([len(probeSync.getOrderedUnits(obj1.units[pid])) for pid in probes1])    
+for exp1, exp2 in zip(firstDayFiles, secondDayFiles):
+    obj1 = getData.behaviorEphys()
+    obj1.loadFromHDF5(exp1)
+    frs = [[len(obj1.units[pid][u]['times'])/obj1.vsyncTimes[-1] for u in probeSync.getOrderedUnits(obj1.units[pid])] for pid in obj1.probes_to_analyze]
+    summaryDict['first']['unitYield'].append([len(probeSync.getOrderedUnits(obj1.units[pid])) for pid in obj1.probes_to_analyze])    
     summaryDict['first']['FiringRate'].append(np.concatenate(frs))
     
-    obj2 = getData.behaviorEphys('Z:\\' + exp2, probes=probes2)
-    obj2.loadFromRawData()
-    summaryDict['second']['unitYield'].append([len(probeSync.getOrderedUnits(obj2.units[pid])) for pid in probes2])
-    frs = [[len(obj2.units[pid][u]['times'])/obj2.vsyncTimes[-1] for u in probeSync.getOrderedUnits(obj2.units[pid])] for pid in probes2]
+    obj2 = getData.behaviorEphys()
+    obj2.loadFromHDF5(exp2)
+    summaryDict['second']['unitYield'].append([len(probeSync.getOrderedUnits(obj2.units[pid])) for pid in obj2.probes_to_analyze])
+    frs = [[len(obj2.units[pid][u]['times'])/obj2.vsyncTimes[-1] for u in probeSync.getOrderedUnits(obj2.units[pid])] for pid in obj2.probes_to_analyze]
     summaryDict['second']['FiringRate'].append(np.concatenate(frs))
 
-
-
+for metric, label in zip(('unitYield', 'FiringRate'), ('Unit Yield Per Probe', 'Mean Firing Rate (Hz)')):
+    y1 = [y for y in summaryDict['first'][metric]]
+    y2 = [y for y in summaryDict['second'][metric]]
+    y1 = [y1[a] for a in [0,1,2,3,5]] #HACK to exclude 0430 and 0501 when we had to reinsert probes
+    y2 = [y2[a] for a in [0,1,2,3,5]]
+    
+    y1_meanPerDay = np.array([np.mean(y) for y in y1])
+    y2_meanPerDay = np.array([np.mean(y) for y in y2])
+    fig,ax = plt.subplots()
+    ax.plot([np.ones(len(y1)), np.ones(len(y2))*2], [y1_meanPerDay, y2_meanPerDay], '-ko', ms=10, alpha=0.3)
+    ax.plot([1,2], [np.mean(m) for m in [y1_meanPerDay, y2_meanPerDay]], 'ko', ms=10)
+    ax.errorbar([1,2], [np.mean(m) for m in [y1_meanPerDay, y2_meanPerDay]], [np.std(m) for m in [y1_meanPerDay, y2_meanPerDay]], c='k')
+    ax.set_xlim([0.5,2.5])
+    ax.set_ylim([0, 1.1*np.max(y1_meanPerDay)])
+    ax.set_xticks([1,2])
+    formatFigure(fig, ax, xLabel='Recording Day', yLabel=label)

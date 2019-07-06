@@ -11,11 +11,12 @@ from analysis_utils import *
 from matplotlib import pyplot as plt
 
 experiments = ['03212019_409096', '03262019_417882', '03272019_417882', '04042019_408528', '04052019_408528', '04102019_408527','04112019_408527', 
-    '04252019_421323', '04262019_421323', '04302019_422856', '05012019_422856', '05162019_423749', '05172019_423749']
+    '04252019_421323', '04262019_421323', '04302019_422856', '05162019_423749', '05172019_423749']
 
 hdf5dir = r"C:\Users\svc_ccg\Desktop\Data\analysis"
 rds = []
 for exp in experiments:
+    print(exp)
     b = getData.behaviorEphys('Z:\\' + exp)
     
     h5FilePath = glob.glob(os.path.join(hdf5dir, exp+'*'))[0]
@@ -97,12 +98,14 @@ for region in regionsOfInterest:
     prechange_norm = prechange_sub/np.max(change_sub, axis=1)[:, None]  
     
     diff = change_sub - prechange_sub
-    changeMod = np.log2(diff.max(axis=1)/prechange_sub.max(axis=1))
+    changeMod = np.log2(diff[:, 280:530].max(axis=1)/prechange_sub[:, 280:530].max(axis=1))
+#    plt.figure(region)
+#    plt.hist(changeMod, bins=np.arange(-0.5, 0.5, 0.05))
     
 #    plt.figure(region + 'changeMod vs Response amp')
 #    plt.plot(prechange_sub.max(axis=1), changeMod, 'ko', alpha=0.5)
-    print(region + ': ' + str(changeMod.mean()))
-    print('n = ' + str(change.shape[0]))
+    print(region + ': ' + str(np.median(changeMod[~np.isnan(changeMod)])))
+    print('n = ' + str(np.sum(~np.isnan(changeMod))))
     
     
     changeMean = np.mean(change_sub, axis=0)
@@ -141,3 +144,4 @@ for ir, r in enumerate(rds):
             ax.plot(changeMean)
             ax.plot(preChangeMean)
             ax.plot(diffMean)
+            ax.text(100, 5, 'n= ' + str(len(r[region]['changePSTH'])))
