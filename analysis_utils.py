@@ -83,12 +83,11 @@ def get_ccg(spikes1, spikes2, auto=False, width=0.1, bin_width=0.0005, plot=Fals
         
     return hh, hb
 
-
 def find_spikes_per_trial(spikes, trial_starts, trial_ends):
-    spike_counts = np.zeros(len(trial_starts))
-    for i, (ts, te) in enumerate(zip(trial_starts, trial_ends)):
-        spike_counts[i] = ((spikes>=ts) & (spikes<te)).sum()  
-    return spike_counts
+    tsinds = np.searchsorted(spikes[:,0], trial_starts)
+    teinds = np.searchsorted(spikes[:,0], trial_ends)
+    
+    return teinds - tsinds
 
 
 def find_run_transitions(run_signal, run_time, thresh = [1,5], smooth_kernel = 0.5, inter_run_interval = 2, min_run_duration = 3, sample_freq = 60):
@@ -149,4 +148,19 @@ def get_trial_by_time(times, trial_start_times, trial_end_times):
         trials.append(trial)
     
     return np.array(trials)
+    
+
+def calculate_lifetime_sparseness(mean_response_vector):
+    '''lifetime sparseness as used in marina's biorxiv paper (defined by Gallant)
+    mean_response_vector (len n) should contain the trial mean of a cell's response 
+    (however defined) over n conditions'''
+    
+    sumsquared = float(np.sum(mean_response_vector)**2)
+    sum_of_squares = float(np.sum(mean_response_vector**2))
+    n = float(mean_response_vector.size)
+    
+    num = 1 - (1/n)*(sumsquared/sum_of_squares)
+    denom = 1 - (1/n)
+    
+    return num/denom
     

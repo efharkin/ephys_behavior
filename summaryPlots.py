@@ -15,6 +15,7 @@ from matplotlib import patches
 import matplotlib.gridspec as gridspec
 from matplotlib.backends.backend_pdf import PdfPages
 from probeData import formatFigure
+import scipy.stats
 
 
 def behavior_summary(obj, tag=''):
@@ -221,10 +222,11 @@ def plot_images(obj, axes):
         ax.set_ylabel(imname,fontsize=12)
 
 
-def plot_rf(obj, spikes, axes=None, resp_latency=0.05):
+def plot_rf(obj, spikes, axes=None, resp_latency=0.025, plot=True, returnMat=False):
     #extract trial stim info (xpos, ypos, ori)
     sweep_table = np.array(obj.rfStimParams['sweep_table'])   #table with rfstim parameters, indexed by sweep order to give stim for each trial
     sweep_order = np.array(obj.rfStimParams['sweep_order'])   #index of stimuli for sweep_table for each trial
+    trialRepeats = int(len(sweep_order)/float(len(sweep_table)))
     
     trial_xpos = np.array([pos[0] for pos in sweep_table[sweep_order, 0]])
     trial_ypos = np.array([pos[1] for pos in sweep_table[sweep_order, 0]])
@@ -234,12 +236,17 @@ def plot_rf(obj, spikes, axes=None, resp_latency=0.05):
     ypos = np.unique(trial_ypos)
     ori = np.unique(trial_ori)
     
+    respInds = tuple([(np.where(ypos==y)[0][0], np.where(xpos==x)[0][0], np.where(ori==o)[0][0]) for (y,x,o) in zip(trial_ypos, trial_xpos, trial_ori)])
     trial_spikes = analysis_utils.find_spikes_per_trial(spikes, obj.rf_trial_start_times+resp_latency, obj.rf_trial_start_times+resp_latency+0.2)
     respMat = np.zeros([ypos.size, xpos.size, ori.size])
-    for (y, x, o, tspikes) in zip(trial_ypos, trial_xpos, trial_ori, trial_spikes):
-        respInd = tuple([np.where(ypos==y)[0][0], np.where(xpos==x)[0][0], np.where(ori==o)[0][0]])
+    for (respInd, tspikes) in zip(respInds, trial_spikes):
         respMat[respInd] += tspikes
+    
     bestOri = np.unravel_index(np.argmax(respMat), respMat.shape)[-1]
+
+    nullRepeats = 10000
+    null = [trial_spikes[randinds].sum() for randinds in [np.random.randint(0, trial_spikes.size, trialRepeats) for n in np.arange(nullRepeats)]]
+    pMat = np.reshape([scipy.stats.percentileofscore(null, ind) for ind in respMat.flatten()], respMat.shape)
     
     gridSpacingDeg = xpos[1]-xpos[0]
     gridSpacingPix = int(round(obj.imageDownsamplePixPerDeg*gridSpacingDeg))
@@ -253,18 +260,21 @@ def plot_rf(obj, spikes, axes=None, resp_latency=0.05):
     rmapColor = plt.cm.magma(rmap)[:,:,:3]
     rmapColor *= rmap[:,:,None]
     
-    for ax,img,imname in zip(axes[:-1],obj.imagesDownsampled,obj.imageNames):
-        img = img.astype(float)
-        img /= 255
-        img *= 1-rmap
-        ax.imshow(rmapColor+img[:,:,None])
-        ax.set_xticks([])
-        ax.set_yticks([])
-        ax.set_ylabel(imname,fontsize=12)
-        
-    axes[-1].imshow(rmap,cmap='magma')
-    axes[-1].set_xticks([])
-    axes[-1].set_yticks([])
+    if plot:
+        for ax,img,imname in zip(axes[:-1],obj.imagesDownsampled,obj.imageNames):
+            img = img.astype(float)
+            img /= 255
+            img *= 1-rmap
+            ax.imshow(rmapColor+img[:,:,None])
+            ax.set_xticks([])
+            ax.set_yticks([])
+            ax.set_ylabel(imname,fontsize=12)
+            
+        axes[-1].imshow(rmap,cmap='magma')
+        axes[-1].set_xticks([])
+        axes[-1].set_yticks([])
+    if returnMat:
+        return respMat, pMat
 
 
 def plot_psth_all_flashes(obj, spikes, axes=None, preTime = 0.05, postTime = 0.55, sdfSigma=0.005, returnSDFs=False):

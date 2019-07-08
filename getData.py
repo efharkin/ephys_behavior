@@ -56,6 +56,7 @@ class behaviorEphys():
         fileIO.hdf5ToObj(self,filePath)
         self.syncDataset = sync.Dataset(self.sync_file)
         self.getBehaviorData()
+        self.getRFandFlashStimInfo()
     
     def loadFromRawData(self):        
         #self.getLFP()
