@@ -582,14 +582,16 @@ def getChangeSDFs(obj,sdfSigma=0.001):
     changeFrames = np.array(obj.trials['change_frame']).astype(int)+1 #add one to correct for change frame indexing problem
     flashFrames = np.array(obj.core_data['visual_stimuli']['frame'])
     
-    sdfs = {probe: {state: {resp: {epoch: [] for epoch in ('change','preChange')} for resp in ('hit','miss')} for state in ('active','passive')} for probe in obj.probes_to_analyze}
+    sdfs = {probe: {state: {resp: {epoch: [] for epoch in ('change','preChange')} for resp in ('hit','miss','all')} for state in ('active','passive')} for probe in obj.probes_to_analyze}
     
     for probe in obj.probes_to_analyze:
         units = probeSync.getOrderedUnits(obj.units[probe])
         for state in sdfs[probe]:
             if state=='active' or len(obj.passive_pickle_file)>0:
                 for resp in (sdfs[probe][state]):
-                    trials = getattr(obj,resp) & (~obj.ignore)
+                    trials = ~obj.ignore
+                    if resp!='all':
+                        trials = trials & getattr(obj,resp)
                     frameTimes =obj.frameAppearTimes if state=='active' else obj.passiveFrameAppearTimes
                     changeTimes = frameTimes[changeFrames[trials]]
                     flashTimes = frameTimes[flashFrames]
@@ -657,9 +659,12 @@ def findLatency(data,baseWin,respWin,thresh=3,minPtsAbove=10):
 
 def calcChangeMod(preChangeSDFs,changeSDFs,baseWin,respWin):
     diff = changeSDFs-preChangeSDFs
-    changeMod = np.log2(diff[respWin].max(axis=1)/preChangeSDFs[respWin].max(axis=1))
+    changeMod = np.log2(diff[:,respWin].max(axis=1)/preChangeSDFs[:,respWin].max(axis=1))
+    changeMod[np.isinf(changeMod)] = np.nan
+    meanMod = np.nanmean(changeMod) # 2**np.nanmean(changeMod)
+    semMod = np.nanstd(changeMod)/(changeMod.size**0.5) # (np.log(2)*np.nanstd(changeMod)*meanMod)/(changeMod.size**0.5)
     changeLat = findLatency(diff.mean(axis=0),baseWin,respWin)
-    return changeMod, changeLat
+    return meanMod, semMod, changeLat
 
 
 Adays = ('04042019','04102019','04252019','04302019','05162019')
@@ -673,8 +678,8 @@ for key in dict(data):
 baseWin = slice(0,250)
 respWin = slice(250,500)
 
-active,passive = [[np.array([s for exp in data for probe in data[exp]['sdfs'] for s in data[exp]['sdfs'][probe][state]['hit'][epoch]]) for state in ('active','passive')] for epoch in ('preChange','change')]
-activePre,activeChange,passivePre,passiveChange = [sdfs-sdfs[:,baseWin].mean(axis=1)[:,None] for sdfs in active+passive]
+pre,change = [[np.array([s for exp in data for probe in data[exp]['sdfs'] for s in data[exp]['sdfs'][probe][state]['all'][epoch]]) for state in ('active','passive')] for epoch in ('preChange','change')]
+activePre,passivePre,activeChange,passiveChange = [sdfs-sdfs[:,baseWin].mean(axis=1)[:,None] for sdfs in pre+change]
 hasResp = activeChange[:,respWin].max(axis=1) > 5*activeChange[:,baseWin].std(axis=1)
 
 regions = np.array([r for exp in data for probe in data[exp]['regions'] for r in data[exp]['regions'][probe]])    
@@ -692,48 +697,71 @@ regionNames = (
                ('MRN',('MRN',)),
                ('hipp',('CA1','CA3','DG-mo','DG-po','DG-sg','HPF'))
               )
+regionNames = regionNames[:6]
 
 nUnits = []
-fig1 = plt.figure()
+fig1 = plt.figure(figsize=(8,8))
 ax1 = fig1.add_subplot(2,1,1)
 ax2 = fig1.add_subplot(2,1,2)
-ax1.plot([0,len(regionNames)],[0,0],'k--')
 for ind,(region,regionLabels) in enumerate(regionNames):
     inRegion = np.in1d(regions,regionLabels) & hasResp
     nUnits.append(inRegion.sum())
     
-    (activeChangeMod,activeChangeLat),(passiveChangeMod,passiveChangeLat) = [calcChangeMod(pre[inRegion],change[inRegion],baseWin,respWin) for pre,change in zip((activePre,passivePre),(activeChange,passiveChange))]
+    (activeChangeMean,activeChangeSem,activeChangeLat),(passiveChangeMean,passiveChangeSem,passiveChangeLat),(diffChangeMean,diffChangeSem,diffChangeLat) = \
+    [calcChangeMod(pre[inRegion],change[inRegion],baseWin,respWin) for pre,change in zip((activePre,passivePre,passiveChange),(activeChange,passiveChange,activeChange))]
     
     activeLat,passiveLat = [findLatency(sdfs[inRegion].mean(axis=0),baseWin,respWin) for sdfs in (activeChange,passiveChange)]
     
-    ax1.plot(ind,np.nanmedian(activeChangeMod),'ro')
-    ax1.plot(ind,np.nanmedian(passiveChangeMod),'bo')
+    for m,s,c in zip((activeChangeMean,passiveChangeMean,diffChangeMean),(activeChangeSem,passiveChangeSem,diffChangeSem),'rbk'):
+        if c!='k':
+            ax1.plot(ind,m,c+'o')
+            ax1.plot([ind,ind],[m-s,m+s],c)
     ax2.plot(ind,activeLat,'o',mec='r',mfc='none')
     ax2.plot(ind,passiveLat,'o',mec='b',mfc='none')
     ax2.plot(ind,activeChangeLat,'o',mec='r',mfc='r')
     ax2.plot(ind,passiveChangeLat,'o',mec='b',mfc='b')
+#    ax2.plot(ind,diffChangeLat,'o',mec='k',mfc='k')
     
-    fig = plt.figure()
+    fig = plt.figure(figsize=(8,8))
     ax = fig.add_subplot(2,1,1)
-    ax.plot(activeChange[inRegion].mean(axis=0),'r')
-    ax.plot(passiveChange[inRegion].mean(axis=0),'b')
+    ax.plot(activeChange[inRegion].mean(axis=0),color=[1,0,0])
+    ax.plot(activePre[inRegion].mean(axis=0),color=[1,0.7,0.7])
+    ax.plot((activeChange-activePre)[inRegion].mean(axis=0),color=[0.5,0.5,0.5])
+    for side in ('right','top'):
+        ax.spines[side].set_visible(False)
+    ax.tick_params(direction='out',top=False,right=False)
+    ax.set_xlim([250,600])
+    ax.set_xticks([250,350,450,550])
+    ax.set_xticklabels([0,100,200,300,400])
     ax.set_ylabel('Spikes/s')
-    ax.set_title(region+' n='+str(nUnits[-1]))
+    ax.set_title(region+' Active')
     
+    ylim = plt.get(ax,'ylim')
     ax = fig.add_subplot(2,1,2)
-    ax.plot((activeChange-activePre)[inRegion].mean(axis=0),'r')
-    ax.plot((passiveChange-passivePre)[inRegion].mean(axis=0),'b')
+    ax.plot(passiveChange[inRegion].mean(axis=0),color=[0,0,1])
+    ax.plot(passivePre[inRegion].mean(axis=0),color=[0.7,0.7,1])
+    ax.plot((passiveChange-passivePre)[inRegion].mean(axis=0),color=[0.5,0.5,0.5])
+    for side in ('right','top'):
+        ax.spines[side].set_visible(False)
+    ax.tick_params(direction='out',top=False,right=False)
+    ax.set_xlim([250,600])
+    ax.set_ylim(ylim)
+    ax.set_xticks([250,350,450,550])
+    ax.set_xticklabels([0,100,200,300,400])
     ax.set_xlabel('Time (ms)')
     ax.set_ylabel('Spikes/s')
-    ax.set_title(region+' n='+str(nUnits[-1]))
+    ax.set_title(region+' Passive')
 
 for a in (ax1,ax2):
-    a.set_xlim([-1,len(regionNames)])
+    for side in ('right','top'):
+        a.spines[side].set_visible(False)
+    a.tick_params(direction='out',top=False,right=False,labelsize=14)
+    a.set_xlim([-0.5,len(regionNames)-0.5])
     a.set_xticks(np.arange(len(regionNames)))
-ax1.set_xticklabels([r[0] for r in regionNames],rotation=90)
-ax2.set_xticklabels([r[0]+' (n='+str(n)+')' for r,n in zip(regionNames,nUnits)],rotation=90)
-ax1.set_ylabel('Change Mod')
-ax2.set_ylabel('Latency (ms)')
+ax1.set_xticklabels([])
+ax2.set_xticklabels([r[0]+'\nn='+str(n) for r,n in zip(regionNames,nUnits)],fontsize=16)
+ax1.set_ylabel('Change Mod',fontsize=16)
+ax2.set_ylabel('Latency (ms)',fontsize=16)
 
 
 
