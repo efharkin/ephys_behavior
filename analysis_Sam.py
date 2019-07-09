@@ -651,10 +651,11 @@ for mouseID,ephysDates,probeIDs in mouseInfo:
         
 
 
-def findLatency(data,baseWin,respWin,thresh=5,minPtsAbove=30):
+def findLatency(data,baseWin,respWin,thresh=3,minPtsAbove=30):
     latency = []
     for d in data:
-        ptsAbove = np.where(np.correlate(d[respWin]>d[baseWin].std()*thresh,np.ones(minPtsAbove),mode='valid')==minPtsAbove)[0]
+#        ptsAbove = np.where(np.correlate(d[respWin]>d[baseWin].std()*thresh,np.ones(minPtsAbove),mode='valid')==minPtsAbove)[0]
+        ptsAbove = np.where(np.correlate(d[respWin]>0.5,np.ones(minPtsAbove),mode='valid')==minPtsAbove)[0]
         if len(ptsAbove)>0:
             latency.append(ptsAbove[0])
         else:
@@ -664,7 +665,7 @@ def findLatency(data,baseWin,respWin,thresh=5,minPtsAbove=30):
 
 def calcChangeMod(preChangeSDFs,changeSDFs,baseWin,respWin):
     diff = changeSDFs-preChangeSDFs
-    changeMod = np.log2(diff[:,respWin].max(axis=1)/preChangeSDFs[:,respWin].max(axis=1))
+    changeMod = np.log2(diff[:,respWin].mean(axis=1)/preChangeSDFs[:,respWin].mean(axis=1))
     changeMod[np.isinf(changeMod)] = np.nan
     meanMod = 2**np.nanmean(changeMod)
     semMod = (np.log(2)*np.nanstd(changeMod)*meanMod)/(changeMod.size**0.5)
@@ -684,8 +685,9 @@ baseWin = slice(0,250)
 respWin = slice(250,500)
 
 pre,change = [[np.array([s for exp in data for probe in data[exp]['sdfs'] for s in data[exp]['sdfs'][probe][state]['all'][epoch]]) for state in ('active','passive')] for epoch in ('preChange','change')]
+hasSpikesActive,hasSpikesPassive = [sdfs.mean(axis=1) > 0.1 for sdfs in change]
 activePre,passivePre,activeChange,passiveChange = [sdfs-sdfs[:,baseWin].mean(axis=1)[:,None] for sdfs in pre+change]
-hasResp = activeChange[:,respWin].max(axis=1) > 5*activeChange[:,baseWin].std(axis=1)
+hasResp = hasSpikesActive & hasSpikesPassive & (activeChange[:,respWin].max(axis=1) > 5*activeChange[:,baseWin].std(axis=1))
 
 regions = np.array([r for exp in data for probe in data[exp]['regions'] for r in data[exp]['regions'][probe]])    
 #regionNames = sorted(list(set(regions)))
@@ -705,22 +707,23 @@ regionNames = (
 regionNames = regionNames[:6]
 
 nUnits = []
-fig1 = plt.figure(figsize=(8,8))
-ax1 = fig1.add_subplot(2,1,1)
-ax2 = fig1.add_subplot(2,1,2)
+fig1 = plt.figure(figsize=(8,6))
+ax1 = fig1.add_subplot(1,1,1)
+fig2 = plt.figure(figsize=(8,6))
+ax2 = fig2.add_subplot(1,1,1)
 for ind,(region,regionLabels) in enumerate(regionNames):
     inRegion = np.in1d(regions,regionLabels) & hasResp
     nUnits.append(inRegion.sum())
     
-    (activeChangeMean,activeChangeSem,activeChangeLat),(passiveChangeMean,passiveChangeSem,passiveChangeLat),(diffChangeMean,diffChangeSem,diffChangeLat) = \
-    [calcChangeMod(pre[inRegion],change[inRegion],baseWin,respWin) for pre,change in zip((activePre,passivePre,passiveChange),(activeChange,passiveChange,activeChange))]
+    (activeChangeMean,activeChangeSem,activeChangeLat),(passiveChangeMean,passiveChangeSem,passiveChangeLat),(diffChangeMean,diffChangeSem,diffChangeLat),(diffPreMean,diffPreSem,diffPreLat) = \
+    [calcChangeMod(pre[inRegion],change[inRegion],baseWin,respWin) for pre,change in zip((activePre,passivePre,passiveChange,passivePre),(activeChange,passiveChange,activeChange,activePre))]
     
     activeLat,passiveLat = [findLatency(sdfs[inRegion],baseWin,respWin) for sdfs in (activeChange,passiveChange)]
     
-    for m,s,c in zip((activeChangeMean,passiveChangeMean,diffChangeMean),(activeChangeSem,passiveChangeSem,diffChangeSem),'rbk'):
-        if c!='k':
-            ax1.plot(ind,m,c+'o')
-            ax1.plot([ind,ind],[m-s,m+s],c)
+    for m,s,ec,fc in zip((activeChangeMean,passiveChangeMean,diffChangeMean,diffPreMean),(activeChangeSem,passiveChangeSem,diffChangeSem,diffPreSem),'rbkk',['r','b','k','none']):
+        if ec!='k':
+            ax1.plot(ind,m,'o',mec=ec,mfc=fc)
+            ax1.plot([ind,ind],[m-s,m+s],ec)
             
     for lat,ec,fc in zip((activeLat,passiveLat,activeChangeLat,passiveChangeLat,diffChangeLat),'rbrbk',('none','none','r','b','k')):
         if ec!='k':
@@ -731,10 +734,12 @@ for ind,(region,regionLabels) in enumerate(regionNames):
     
     fig = plt.figure(figsize=(8,8))
     ylim = None
-    for i,(pre,change,label) in enumerate(zip((activePre,passivePre),(activeChange,passiveChange),('Active','Passive'))):
+    for i,(pre,change,clr,lbl) in enumerate(zip((activePre,passivePre),(activeChange,passiveChange),([1,0,0],[0,0,1]),('Active','Passive'))):
         ax = fig.add_subplot(2,1,i+1)
-        ax.plot(change[inRegion].mean(axis=0),color=[1,0,0])
-        ax.plot(pre[inRegion].mean(axis=0),color=[1,0.7,0.7])
+        ax.plot(change[inRegion].mean(axis=0),color=clr)
+        clrlight = np.array(clr).astype(float)
+        clrlight[clrlight==0] = 0.7
+        ax.plot(pre[inRegion].mean(axis=0),color=clrlight)
         ax.plot((change-pre)[inRegion].mean(axis=0),color=[0.5,0.5,0.5])
         for side in ('right','top'):
             ax.spines[side].set_visible(False)
@@ -747,31 +752,30 @@ for ind,(region,regionLabels) in enumerate(regionNames):
         else:
             ax.set_ylim(ylim)
         ax.set_ylabel('Spikes/s')
-        ax.set_title(region+' '+label)
+        ax.set_title(region+' '+lbl)
 
-for a in (ax1,ax2):
+for ax in (ax1,ax2):
     for side in ('right','top'):
-        a.spines[side].set_visible(False)
-    a.tick_params(direction='out',top=False,right=False,labelsize=14)
-    a.set_xlim([-0.5,len(regionNames)-0.5])
-    a.set_xticks(np.arange(len(regionNames)))
-ax1.set_xticklabels([])
-ax2.set_xticklabels([r[0]+'\nn='+str(n) for r,n in zip(regionNames,nUnits)],fontsize=16)
-ax1.set_ylabel('Change Mod (% of pre-change)',fontsize=16)
+        ax.spines[side].set_visible(False)
+    ax.tick_params(direction='out',top=False,right=False,labelsize=14)
+    ax.set_xlim([-0.5,len(regionNames)-0.5])
+    ax.set_xticks(np.arange(len(regionNames)))
+    ax.set_xticklabels([r[0]+'\nn='+str(n) for r,n in zip(regionNames,nUnits)],fontsize=16)
+ax1.set_ylabel('Change Mod',fontsize=16)
 ax2.set_ylabel('Latency (ms)',fontsize=16)
 
 
 
 
 from sklearn.ensemble import RandomForestClassifier
-from sklearn.cross_validation import cross_val_score
+from sklearn.model_selection import cross_val_score
 
 
-model = RandomForestRegressor(n_estimators=100)
-X = np.concatenate([alldata['04042019_408528']['A']['active']['hit'][epoch] for epoch in ('change','preChange')])
+model = RandomForestClassifier(n_estimators=100)
+X = np.concatenate([alldata['04042019_408528']['sdfs']['A']['active']['all'][epoch] for epoch in ('change','preChange')])[:,respWin]
 y = np.zeros(X.shape[0])
 y[:int(X.shape[0]/2)] = 1
-score = cross_val_score(model,X,y,cv=2)
+score = cross_val_score(model,X,y,cv=9)
 
 
 
