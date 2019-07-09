@@ -574,7 +574,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 
-def getChangeSDFs(obj,sdfSigma=0.001):
+def getChangeSDFs(obj,sdfFilt='exp',sdfSigma=0.005):
     
     preTime = 0.25
     postTime = 0.75
@@ -599,7 +599,7 @@ def getChangeSDFs(obj,sdfSigma=0.001):
                     for u in units:
                         spikes = obj.units[probe][u]['times']
                         for epoch,startTimes in zip(('change','preChange'),(changeTimes,preChangeTimes)):
-                            s = analysis_utils.getSDF(spikes,startTimes-preTime,preTime+postTime,sigma=sdfSigma)[0]
+                            s = analysis_utils.getSDF(spikes,startTimes-preTime,preTime+postTime,filt=sdfFilt,sigma=sdfSigma)[0]
                             sdfs[probe][state][resp][epoch].append(s)                    
     return sdfs
 
@@ -651,19 +651,24 @@ for mouseID,ephysDates,probeIDs in mouseInfo:
         
 
 
-def findLatency(data,baseWin,respWin,thresh=3,minPtsAbove=10):
-    ptsAbove = np.where(np.correlate(data[respWin]>data[baseWin].std()*thresh,np.ones(minPtsAbove),mode='valid')==minPtsAbove)[0]
-    latency = ptsAbove[0] if len(ptsAbove)>0 else np.nan
-    return latency
+def findLatency(data,baseWin,respWin,thresh=5,minPtsAbove=30):
+    latency = []
+    for d in data:
+        ptsAbove = np.where(np.correlate(d[respWin]>d[baseWin].std()*thresh,np.ones(minPtsAbove),mode='valid')==minPtsAbove)[0]
+        if len(ptsAbove)>0:
+            latency.append(ptsAbove[0])
+        else:
+            latency.append(np.nan)
+    return np.array(latency)
 
 
 def calcChangeMod(preChangeSDFs,changeSDFs,baseWin,respWin):
     diff = changeSDFs-preChangeSDFs
     changeMod = np.log2(diff[:,respWin].max(axis=1)/preChangeSDFs[:,respWin].max(axis=1))
     changeMod[np.isinf(changeMod)] = np.nan
-    meanMod = np.nanmean(changeMod) # 2**np.nanmean(changeMod)
-    semMod = np.nanstd(changeMod)/(changeMod.size**0.5) # (np.log(2)*np.nanstd(changeMod)*meanMod)/(changeMod.size**0.5)
-    changeLat = findLatency(diff.mean(axis=0),baseWin,respWin)
+    meanMod = 2**np.nanmean(changeMod)
+    semMod = (np.log(2)*np.nanstd(changeMod)*meanMod)/(changeMod.size**0.5)
+    changeLat = findLatency(diff,baseWin,respWin)
     return meanMod, semMod, changeLat
 
 
@@ -710,47 +715,39 @@ for ind,(region,regionLabels) in enumerate(regionNames):
     (activeChangeMean,activeChangeSem,activeChangeLat),(passiveChangeMean,passiveChangeSem,passiveChangeLat),(diffChangeMean,diffChangeSem,diffChangeLat) = \
     [calcChangeMod(pre[inRegion],change[inRegion],baseWin,respWin) for pre,change in zip((activePre,passivePre,passiveChange),(activeChange,passiveChange,activeChange))]
     
-    activeLat,passiveLat = [findLatency(sdfs[inRegion].mean(axis=0),baseWin,respWin) for sdfs in (activeChange,passiveChange)]
+    activeLat,passiveLat = [findLatency(sdfs[inRegion],baseWin,respWin) for sdfs in (activeChange,passiveChange)]
     
     for m,s,c in zip((activeChangeMean,passiveChangeMean,diffChangeMean),(activeChangeSem,passiveChangeSem,diffChangeSem),'rbk'):
         if c!='k':
             ax1.plot(ind,m,c+'o')
             ax1.plot([ind,ind],[m-s,m+s],c)
-    ax2.plot(ind,activeLat,'o',mec='r',mfc='none')
-    ax2.plot(ind,passiveLat,'o',mec='b',mfc='none')
-    ax2.plot(ind,activeChangeLat,'o',mec='r',mfc='r')
-    ax2.plot(ind,passiveChangeLat,'o',mec='b',mfc='b')
-#    ax2.plot(ind,diffChangeLat,'o',mec='k',mfc='k')
+            
+    for lat,ec,fc in zip((activeLat,passiveLat,activeChangeLat,passiveChangeLat,diffChangeLat),'rbrbk',('none','none','r','b','k')):
+        if ec!='k':
+            m = np.nanmedian(lat)
+            s = np.nanstd(lat)/(lat.size**0.5)
+            ax2.plot(ind,m,'o',mec=ec,mfc=fc)
+            ax2.plot([ind,ind],[m-s,m+s],ec)
     
     fig = plt.figure(figsize=(8,8))
-    ax = fig.add_subplot(2,1,1)
-    ax.plot(activeChange[inRegion].mean(axis=0),color=[1,0,0])
-    ax.plot(activePre[inRegion].mean(axis=0),color=[1,0.7,0.7])
-    ax.plot((activeChange-activePre)[inRegion].mean(axis=0),color=[0.5,0.5,0.5])
-    for side in ('right','top'):
-        ax.spines[side].set_visible(False)
-    ax.tick_params(direction='out',top=False,right=False)
-    ax.set_xlim([250,600])
-    ax.set_xticks([250,350,450,550])
-    ax.set_xticklabels([0,100,200,300,400])
-    ax.set_ylabel('Spikes/s')
-    ax.set_title(region+' Active')
-    
-    ylim = plt.get(ax,'ylim')
-    ax = fig.add_subplot(2,1,2)
-    ax.plot(passiveChange[inRegion].mean(axis=0),color=[0,0,1])
-    ax.plot(passivePre[inRegion].mean(axis=0),color=[0.7,0.7,1])
-    ax.plot((passiveChange-passivePre)[inRegion].mean(axis=0),color=[0.5,0.5,0.5])
-    for side in ('right','top'):
-        ax.spines[side].set_visible(False)
-    ax.tick_params(direction='out',top=False,right=False)
-    ax.set_xlim([250,600])
-    ax.set_ylim(ylim)
-    ax.set_xticks([250,350,450,550])
-    ax.set_xticklabels([0,100,200,300,400])
-    ax.set_xlabel('Time (ms)')
-    ax.set_ylabel('Spikes/s')
-    ax.set_title(region+' Passive')
+    ylim = None
+    for i,(pre,change,label) in enumerate(zip((activePre,passivePre),(activeChange,passiveChange),('Active','Passive'))):
+        ax = fig.add_subplot(2,1,i+1)
+        ax.plot(change[inRegion].mean(axis=0),color=[1,0,0])
+        ax.plot(pre[inRegion].mean(axis=0),color=[1,0.7,0.7])
+        ax.plot((change-pre)[inRegion].mean(axis=0),color=[0.5,0.5,0.5])
+        for side in ('right','top'):
+            ax.spines[side].set_visible(False)
+        ax.tick_params(direction='out',top=False,right=False)
+        ax.set_xlim([250,600])
+        ax.set_xticks([250,350,450,550])
+        ax.set_xticklabels([0,100,200,300,400])
+        if ylim is None:
+            ylim = plt.get(ax,'ylim')
+        else:
+            ax.set_ylim(ylim)
+        ax.set_ylabel('Spikes/s')
+        ax.set_title(region+' '+label)
 
 for a in (ax1,ax2):
     for side in ('right','top'):
@@ -760,7 +757,7 @@ for a in (ax1,ax2):
     a.set_xticks(np.arange(len(regionNames)))
 ax1.set_xticklabels([])
 ax2.set_xticklabels([r[0]+'\nn='+str(n) for r,n in zip(regionNames,nUnits)],fontsize=16)
-ax1.set_ylabel('Change Mod',fontsize=16)
+ax1.set_ylabel('Change Mod (% of pre-change)',fontsize=16)
 ax2.set_ylabel('Latency (ms)',fontsize=16)
 
 
