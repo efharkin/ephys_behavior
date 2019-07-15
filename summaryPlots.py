@@ -490,7 +490,7 @@ def plot_spike_template(obj, pid, uid, gs=None):
     acgax.set_ylabel('Spike count')
 
 
-def plot_lick_triggered_fr(obj, spikes, axis, min_inter_lick_time = 0.5, preTime=1, postTime=2):
+def plot_lick_triggered_fr(obj, spikes, axis=None, min_inter_lick_time = 0.5, preTime=1, postTime=2, plot=True, sdfSigma=0.01, returnSDF=False):
     frameTimes = obj.frameAppearTimes    
     
     trial_start_frames = np.array(obj.trials['startframe'])
@@ -512,14 +512,18 @@ def plot_lick_triggered_fr(obj, spikes, axis, min_inter_lick_time = 0.5, preTime
     hit_lick_times = first_lick_times[np.where(hit[first_lick_trials])[0]]
     bad_lick_times = first_lick_times[np.where(falseAlarm[first_lick_trials] | earlyResponse[first_lick_trials])[0]]
    
-    hit_psth, t = analysis_utils.getSDF(spikes,hit_lick_times-preTime,preTime+postTime)
-    bad_psth, t  = analysis_utils.getSDF(spikes,bad_lick_times-preTime,preTime+postTime)
+    hit_psth, t = analysis_utils.getSDF(spikes,hit_lick_times-preTime,preTime+postTime, sigma=sdfSigma)
+    bad_psth, t  = analysis_utils.getSDF(spikes,bad_lick_times-preTime,preTime+postTime, sigma=sdfSigma)
     
-    hit, = axis.plot(t-1,hit_psth, 'k')
-    bad, = axis.plot(t-1, bad_psth, 'r')
-    axis.legend((hit, bad), ('hit', 'aborted/FA'), loc='best', prop={'size':8})
-    formatFigure(plt.gcf(), axis, xLabel='Time to lick (s)',  yLabel='Lick-Trig. FR (Hz)')
-    axis.plot([0,0], axis.get_ylim(), 'k--')
+    if plot:
+        hit, = axis.plot(t-1,hit_psth, 'k')
+        bad, = axis.plot(t-1, bad_psth, 'r')
+        axis.legend((hit, bad), ('hit', 'aborted/FA'), loc='best', prop={'size':8})
+        formatFigure(plt.gcf(), axis, xLabel='Time to lick (s)',  yLabel='Lick-Trig. FR (Hz)')
+        axis.plot([0,0], axis.get_ylim(), 'k--')
+        
+    if returnSDF:
+        return hit_psth, bad_psth
     
     
 def plot_run_triggered_fr(obj, spikes, axis, preTime=1, postTime=2):      

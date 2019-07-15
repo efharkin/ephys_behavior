@@ -221,7 +221,7 @@ def getLFPData(dataDir, pid, syncDataset, probePXIDict, probeGen = '3b', num_cha
         event_times_file = open(os.path.join(events_dir, 'event_timestamps.npy'), 'rb')
         event_times_file.seek(8*22+1)
         event_times = np.fromfile(event_times_file, dtype='<u8')[:channel_states.size]
-            
+        lfp_data_reshape = lfp_data_reshape[:time_stamps.size]
     else:   
          channel_states = np.load(os.path.join(events_dir, 'channel_states.npy'))
          event_times = np.load(os.path.join(events_dir, 'event_timestamps.npy'))

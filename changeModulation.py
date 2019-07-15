@@ -223,7 +223,8 @@ for r in np.unique(regionDict['region']):
     ch_preferred = ch_preferred - np.mean(ch_preferred[:, :250], axis=1)[:, None]
     pre_preferred = pre_preferred - np.mean(pre_preferred[:, :250], axis=1)[:, None]
     diff_preferred = ch_preferred - pre_preferred
-    changeMod_preferred = np.log2(diff_preferred[:, responseWindow].max(axis=1)/pre_preferred[:, responseWindow].max(axis=1))
+    #changeMod_preferred = np.log2(diff_preferred[:, responseWindow].max(axis=1)/pre_preferred[:, responseWindow].max(axis=1))
+    changeMod_preferred = np.log2(np.mean(ch_preferred[:, responseWindow], axis=1)/np.mean(pre_preferred[:, responseWindow], axis=1))
     changeModDict[r]['pref'].append(changeMod_preferred)
     
     ch_all = np.mean(thischange, axis=1)
@@ -231,7 +232,8 @@ for r in np.unique(regionDict['region']):
     ch_all = ch_all - np.mean(ch_all[:, :250], axis=1)[:, None]
     pre_all = pre_all - np.mean(pre_all[:, :250], axis=1)[:, None]
     diff_all = ch_all - pre_all
-    changeMod_all = np.log2(diff_all[:, responseWindow].max(axis=1)/pre_all[:, responseWindow].max(axis=1))
+    #changeMod_all = np.log2(diff_all[:, responseWindow].max(axis=1)/pre_all[:, responseWindow].max(axis=1))
+    changeMod_all = np.log2(np.mean(ch_all[:, responseWindow], axis=1)/np.mean(pre_all[:, responseWindow], axis=1))
     changeModDict[r]['all'].append(changeMod_all)
     
     plt.figure(r + '_preferred')
@@ -250,9 +252,9 @@ for r in np.unique(regionDict['region']):
 
     sortedPeaks = np.argsort(ch_peaktuning, axis=1)
     
-    plt.figure(r + '_tuning')
-    plt.plot(np.mean([a[s] for a,s in zip(ch_peaktuning, sortedPeaks)], axis=0))
-    plt.plot(np.mean([a[s] for a,s in zip(pre_peaktuning, sortedPeaks)], axis=0))
+#    plt.figure(r + '_tuning')
+#    plt.plot(np.mean([a[s] for a,s in zip(ch_peaktuning, sortedPeaks)], axis=0))
+#    plt.plot(np.mean([a[s] for a,s in zip(pre_peaktuning, sortedPeaks)], axis=0))
 #    ax = plt.gca()
 #    ax.set_ylim([0, 21])
     
@@ -293,7 +295,7 @@ for exp in experiments:
         for u in probeSync.getOrderedUnits(b.units[pid]):
             spikes = b.units[pid][u]['times']
             
-            if np.sum(spikes<3600)<1800: #exclude cells that fire below 1Hz during task
+            if np.sum(spikes<3600)<1800: #exclude cells that fire below 0.5Hz during task
                 continue
             
             #check if RF
@@ -325,6 +327,13 @@ regiondf = pd.DataFrame.from_dict(regionDict)
 
 fig, ax = plt.subplots()
 for i, r in enumerate(['VISp', 'VISl', 'VISal', 'VISrl', 'VISpm', 'VISam']):
-    plt.plot(i, np.nanmedian(changeModDict[r]['all']), 'ko')
-    plt.plot(i, np.nanmedian(changeModDict[r]['pref']), 'go')
+    all_c = np.squeeze(changeModDict[r]['all'])
+    all_c[np.isinf(all_c)] = np.nan
+    pref_c = np.squeeze(changeModDict[r]['pref'])
+    pref_c[np.isinf(pref_c)] = np.nan
+    ax.plot(i, np.nanmean(all_c), 'ko')
+    ax.plot(i, np.nanmean(pref_c), 'go')
+    ax.errorbar(i, np.nanmean(all_c), np.nanstd(all_c)/(np.sum(~np.isnan(all_c)))**0.5, c='k')
+    ax.errorbar(i, np.nanmean(pref_c), np.nanstd(pref_c)/(np.sum(~np.isnan(pref_c)))**0.5, c='g')
+
 ax.set_xticklabels(['', 'VISp', 'VISl', 'VISal', 'VISrl', 'VISpm', 'VISam'])
