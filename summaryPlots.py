@@ -244,7 +244,7 @@ def plot_rf(obj, spikes, axes=None, resp_latency=0.025, plot=True, returnMat=Fal
     
     bestOri = np.unravel_index(np.argmax(respMat), respMat.shape)[-1]
 
-    nullRepeats = 10000
+    nullRepeats = 1000
     null = [trial_spikes[randinds].sum() for randinds in [np.random.randint(0, trial_spikes.size, trialRepeats) for n in np.arange(nullRepeats)]]
     pMat = np.reshape([scipy.stats.percentileofscore(null, ind) for ind in respMat.flatten()], respMat.shape)
     

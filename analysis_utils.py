@@ -159,8 +159,13 @@ def calculate_lifetime_sparseness(mean_response_vector):
     sum_of_squares = float(np.sum(mean_response_vector**2))
     n = float(mean_response_vector.size)
     
-    num = 1 - (1/n)*(sumsquared/sum_of_squares)
-    denom = 1 - (1/n)
+    try:
+        num = 1 - (1/n)*(sumsquared/sum_of_squares)
+        denom = 1 - (1/n)
+        
+        ls = num/denom
+    except:
+        ls = np.nan
     
-    return num/denom
+    return ls
     
