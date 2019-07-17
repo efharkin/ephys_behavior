@@ -12,9 +12,8 @@ import probeSync
 import analysis_utils
 import numpy as np
 import matplotlib.pyplot as plt
-import matplotlib.gridspec as gridspec
-import matplotlib as mpl
-mpl.rcParams['pdf.fonttype'] = 42
+import matplotlib
+matplotlib.rcParams['pdf.fonttype'] = 42
 
 
 baseDir = 'Z:\\'
@@ -237,7 +236,6 @@ for ax,ylbl in zip(axes,('Baseline (spikes/s)','Mean Resp (spikes/s)','Peak Resp
 
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.model_selection import cross_val_score
-#from sklearn.model_selection import LeaveOneOut
 
 
 data = getDataDict(miceToAnalyze='all',imageSetsToAnalyze='A',mustHavePassive=False,sdfParams={'responses':['all'],'preTime':0,'postTime':0.25,'avg':False})
@@ -256,14 +254,16 @@ for exp in data:
         
 
 nUnits = 20
-nRepeats = 5
+nRepeats = 3
 truncInterval = 5
-respTrunc = np.arange(truncInterval,251,truncInterval)
+respTrunc = np.arange(truncInterval,201,truncInterval)
 
 model = RandomForestClassifier(n_estimators=100)
 result = {region: {state: {'exps':[],'changeScore':[],'imageScore':[]} for state in ('active','passive')} for region in regionLabels}
-for exp in data:
-    for probe in data[exp]['sdfs']:
+for expInd,exp in enumerate(data):
+    print('experiment '+str(expInd+1)+' of '+str(len(data.keys())))
+    for probeInd,probe in enumerate(data[exp]['sdfs']):
+        print('probe '+str(probeInd)+' of '+str(len(data[exp]['sdfs'].keys())))
         region = data[exp]['isi'][probe]
         if region in regionLabels:
             inRegion = np.in1d(data[exp]['regions'][probe],region)
@@ -287,7 +287,7 @@ for exp in data:
                                 y[:int(X.shape[0]/2)] = 1
                                 changeScore[i,j] = cross_val_score(model,X,y,cv=3).mean()
                                 # decode image identity
-                                imgSDFs = [np.array(data[exp]['sdfs'][probe][state]['all'][epoch][img])[u][:,:,0:end].transpose((1,0,2)) for img in data[exp]['sdfs'][probe][state]['all'][epoch] if img!='all']
+                                imgSDFs = [np.array(data[exp]['sdfs'][probe][state]['all']['change'][img])[u][:,:,0:end].transpose((1,0,2)) for img in data[exp]['sdfs'][probe][state]['all']['change'] if img!='all']
                                 X = np.concatenate([s.reshape((s.shape[0],-1)) for s in imgSDFs])
                                 y = np.concatenate([np.zeros(s.shape[0])+imgNum for imgNum,s in enumerate(imgSDFs)])
                                 imageScore[i,j] = cross_val_score(model,X,y,cv=3).mean()
@@ -297,10 +297,9 @@ for exp in data:
 
 
 
-for score in ('changeScore','imageScore'):
-    plt.figure(facecolor='w',figsize=(8,6))
-    gs = gridspec.GridSpec(len(regionLabels),2)
-    gs.update(top=0.95, bottom = 0.05, left=0.05, right=0.95, wspace=0.3)
+for score,ymin in zip(('changeScore','imageScore'),[0,0.45]):
+    plt.figure(facecolor='w',figsize=(10,10))
+    gs = matplotlib.gridspec.GridSpec(len(regionLabels),2)
     for i,region in enumerate(regionLabels):
         for j,state in enumerate(('active','passive')):
             ax = plt.subplot(gs[i,j])
@@ -309,15 +308,19 @@ for score in ('changeScore','imageScore'):
             ax.tick_params(direction='out',top=False,right=False)
             for s in result[region][state][score]:
                 ax.plot(respTrunc,s,'k')
-            ax.set_xlim([0,250])
-            ax.set_ylim([0,1])
+            ax.set_xticks([0,50,100,150,200])
+            ax.set_yticks([0.5,0.75,1])
+            ax.set_xlim([0,200])
+            ax.set_ylim([ymin,1])
             if i<len(regionLabels)-1:
                 ax.set_xticklabels([])
             if j==0:
                 ax.set_title(region)
+            else:
+                ax.set_yticklabels([])
             if i==0 and j==0:
                 ax.set_ylabel('Decoder Accuracy')
-        ax.set_xlabel('Time (ms)')
+    ax.set_xlabel('Time (ms)')
 
 
 
