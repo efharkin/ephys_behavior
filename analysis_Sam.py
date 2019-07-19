@@ -250,6 +250,14 @@ from sklearn.ensemble import RandomForestClassifier
 from sklearn.model_selection import cross_val_score
 
 
+def findResponsiveUnits(sdfs,baseWin,respWin):
+    unitMeanSDFs = np.array([s.mean(axis=0) for s in sdfs])
+    hasSpikes = unitMeanSDFs.mean(axis=1)>0.1
+    unitMeanSDFs -= unitMeanSDFs[:,baseWin].mean(axis=1)[:,None]
+    hasResp = unitMeanSDFs[:,respWin].max(axis=1) > 5*unitMeanSDFs[:,baseWin].std(axis=1)
+    return hasSpikes,hasResp
+
+
 data = h5py.File(os.path.join(localDir,'popData.hdf5'))
 
 regionLabels = ('VISp','VISl','VISal','VISrl','VISpm','VISam')
@@ -263,23 +271,22 @@ for exp in data:
         n = []
         for region in regionLabels:
             inRegion = data[exp]['regions'][probe][:]==region
-            unitMeanSDFs = np.array([s.mean(axis=0) for s in data[exp]['sdfs'][probe]['active']['change'][:,:,baseWin.start:respWin.stop]])
-            hasSpikes = unitMeanSDFs.mean(axis=1)>0.1
-            unitMeanSDFs -= unitMeanSDFs[:,baseWin].mean(axis=1)[:,None]
-            hasResp = unitMeanSDFs[:,respWin].max(axis=1) > 5*unitMeanSDFs[:,baseWin].std(axis=1)
+            sdfs = data[exp]['sdfs'][probe]['active']['change'][:,:,baseWin.start:respWin.stop]
+            hasSpikes,hasResp = findResponsiveUnits(sdfs,baseWin,respWin)
             n.append(np.sum(inRegion & hasSpikes & hasResp))
         print(probe,n)
         
 
-nUnits = 20
+nUnits = [10,20,30,40,50]
 nRepeats = 5
 nCrossVal = 5
 
-truncInterval = 5
-respTrunc = np.arange(truncInterval,201,truncInterval)
+truncInterval = 200
+lastTrunc = 200
+truncTimes = np.arange(truncInterval,lastTrunc+1,truncInterval)
 
 model = RandomForestClassifier(n_estimators=100)
-result = {region: {state: {'exps':[],'changeScore':[],'imageScore':[]} for state in ('active','passive')} for region in regionLabels}
+result = {region: {state: {'exps':[[] for n in nUnits],'changeScore':[[] for n in nUnits],'imageScore':[[] for n in nUnits]} for state in ('active','passive')} for region in regionLabels}
 for expInd,exp in enumerate(data):
     print('experiment '+str(expInd+1)+' of '+str(len(data.keys())))
     response = data[exp]['response'][:]
@@ -291,34 +298,42 @@ for expInd,exp in enumerate(data):
         region = data[exp]['isi'][probe].value
         if region in regionLabels:
             inRegion = data[exp]['regions'][probe][:]==region
-            unitMeanSDFs = np.array([s.mean(axis=0) for s in data[exp]['sdfs'][probe]['active']['change'][:,:,baseWin.start:respWin.stop]])
-            hasSpikes = unitMeanSDFs.mean(axis=1)>0.1
-            unitMeanSDFs -= unitMeanSDFs[:,baseWin].mean(axis=1)[:,None]
-            hasResp = unitMeanSDFs[:,respWin].max(axis=1) > 5*unitMeanSDFs[:,baseWin].std(axis=1)
-            useUnits = inRegion & hasSpikes & hasResp
-            if useUnits.sum()>nUnits:
-                units = np.where(useUnits)[0]
-                unitSamples = [np.random.choice(units,nUnits) for _ in range(nRepeats)]
-                for state in result[region]:
-                    if state in data[exp]['sdfs'][probe] and len(data[exp]['sdfs'][probe][state]['change'])>0:
-                        changeScore = np.zeros((nRepeats,respTrunc.size))
-                        imageScore = np.zeros_like(changeScore)
-                        changeSDFs,preChangeSDFs = [data[exp]['sdfs'][probe][state][epoch][:,:,respWin].transpose((1,0,2))[trials] for epoch in ('change','preChange')]
-                        for i,u in enumerate(unitSamples):
-                            for j,end in enumerate(respTrunc):
-                                # decode image change
-                                X = np.concatenate([sdfs[:,u,:end].reshape((sdfs.shape[0],-1)) for sdfs in (changeSDFs,preChangeSDFs)])
-                                y = np.zeros(X.shape[0])
-                                y[:int(X.shape[0]/2)] = 1
-                                changeScore[i,j] = cross_val_score(model,X,y,cv=nCrossVal).mean()
-                                # decode image identity
-                                imgSDFs = [changeSDFs[:,u,:end][changeImage==img] for img in imageNames]
-                                X = np.concatenate([s.reshape((s.shape[0],-1)) for s in imgSDFs])
-                                y = np.concatenate([np.zeros(s.shape[0])+imgNum for imgNum,s in enumerate(imgSDFs)])
-                                imageScore[i,j] = cross_val_score(model,X,y,cv=nCrossVal).mean()
-                        result[region][state]['exps'].append(exp)
-                        result[region][state]['changeScore'].append(changeScore.mean(axis=0))
-                        result[region][state]['imageScore'].append(imageScore.mean(axis=0))
+            activeSDFs = data[exp]['sdfs'][probe]['active']['change']
+            hasSpikesActive,hasRespActive = findResponsiveUnits(activeSDFs[:,:,baseWin.start:respWin.stop],baseWin,respWin)
+            useUnits = inRegion & hasSpikesActive & hasRespActive
+            if 'passive' in result[region]:
+                passiveSDFs = data[exp]['sdfs'][probe]['passive']['change']
+                if len(passiveSDFs)>0:
+                    hasSpikesPassive,hasRespPassive = findResponsiveUnits(passiveSDFs[:,:,baseWin.start:respWin.stop],baseWin,respWin)
+                    useUnits = useUnits & hasSpikesPassive
+            units = np.where(useUnits)[0]
+            for nUnitsInd,n in enumerate(nUnits):
+                if len(units)>=n:
+                    unitSamples = [np.random.choice(units,size=n,replace=False) for _ in range(nRepeats)]
+                    for state in result[region]:
+                        if state in data[exp]['sdfs'][probe] and len(data[exp]['sdfs'][probe][state]['change'])>0:
+                            changeScore = np.zeros((nRepeats,len(truncTimes)))
+                            imageScore = np.zeros_like(changeScore)
+                            changeSDFs,preChangeSDFs = [data[exp]['sdfs'][probe][state][epoch][:,:,respWin].transpose((1,0,2))[trials] for epoch in ('change','preChange')]
+                            for i,u in enumerate(unitSamples):
+                                for j,trunc in enumerate(truncTimes):
+                                    # decode image change
+                                    X = np.concatenate([sdfs[:,u,:trunc].reshape((sdfs.shape[0],-1)) for sdfs in (changeSDFs,preChangeSDFs)])
+                                    y = np.zeros(X.shape[0])
+                                    y[:int(X.shape[0]/2)] = 1
+                                    changeScore[i,j] = cross_val_score(model,X,y,cv=nCrossVal).mean()
+                                    # decode image identity
+                                    imgSDFs = [changeSDFs[:,u,:trunc][changeImage==img] for img in imageNames]
+                                    X = np.concatenate([s.reshape((s.shape[0],-1)) for s in imgSDFs])
+                                    y = np.concatenate([np.zeros(s.shape[0])+imgNum for imgNum,s in enumerate(imgSDFs)])
+                                    imageScore[i,j] = cross_val_score(model,X,y,cv=nCrossVal).mean()
+                            result[region][state]['exps'][nUnitsInd].append(exp)
+                            result[region][state]['changeScore'][nUnitsInd].append(changeScore.mean(axis=0))
+                            result[region][state]['imageScore'][nUnitsInd].append(imageScore.mean(axis=0))
+                            
+
+# plot scores vs number of units
+
 
 
 # plot scores for each probe
