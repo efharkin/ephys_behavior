@@ -254,6 +254,7 @@ data = h5py.File(os.path.join(localDir,'popData.hdf5'))
 
 regionLabels = ('VISp','VISl','VISal','VISrl','VISpm','VISam')
 
+baseWin = slice(0,250)
 respWin = slice(250,500)
 
 for exp in data:
@@ -262,17 +263,19 @@ for exp in data:
         n = []
         for region in regionLabels:
             inRegion = data[exp]['regions'][probe][:]==region
-            unitMeanSDFs = np.array([s.mean(axis=0) for s in data[exp]['sdfs'][probe]['active']['change'][[0,2,5],:,respWin]])
+            unitMeanSDFs = np.array([s.mean(axis=0) for s in data[exp]['sdfs'][probe]['active']['change'][:,:,baseWin.start:respWin.stop]])
             hasSpikes = unitMeanSDFs.mean(axis=1)>0.1
-            n.append(np.sum(inRegion & hasSpikes))
+            unitMeanSDFs -= unitMeanSDFs[:,baseWin].mean(axis=1)[:,None]
+            hasResp = unitMeanSDFs[:,respWin].max(axis=1) > 5*unitMeanSDFs[:,baseWin].std(axis=1)
+            n.append(np.sum(inRegion & hasSpikes & hasResp))
         print(probe,n)
         
 
-nUnits = 30
-nRepeats = 3
-nCrossVal = 3
+nUnits = 20
+nRepeats = 5
+nCrossVal = 2
 
-truncInterval = 25
+truncInterval = 5
 respTrunc = np.arange(truncInterval,201,truncInterval)
 
 model = RandomForestClassifier(n_estimators=100)
@@ -288,10 +291,12 @@ for expInd,exp in enumerate(data):
         region = data[exp]['isi'][probe].value
         if region in regionLabels:
             inRegion = data[exp]['regions'][probe][:]==region
-            unitMeanSDFs = np.array([s.mean(axis=0) for s in data[exp]['sdfs'][probe]['active']['change'][:,:,respWin]])
+            unitMeanSDFs = np.array([s.mean(axis=0) for s in data[exp]['sdfs'][probe]['active']['change'][:,:,baseWin.start:respWin.stop]])
             hasSpikes = unitMeanSDFs.mean(axis=1)>0.1
+            unitMeanSDFs -= unitMeanSDFs[:,baseWin].mean(axis=1)[:,None]
+            hasResp = unitMeanSDFs[:,respWin].max(axis=1) > 5*unitMeanSDFs[:,baseWin].std(axis=1)
             if inRegion.sum()>nUnits:
-                units = np.where(inRegion & hasSpikes)[0]
+                units = np.where(inRegion & hasSpikes & hasResp)[0]
                 unitSamples = [np.random.choice(units,nUnits) for _ in range(nRepeats)]
                 for state in result[region]:
                     if state in data[exp]['sdfs'][probe] and len(data[exp]['sdfs'][probe][state]['change'])>0:
@@ -322,11 +327,11 @@ for score,ymin in zip(('changeScore','imageScore'),[0.45,0]):
     for i,region in enumerate(regionLabels):
         for j,state in enumerate(('active','passive')):
             ax = plt.subplot(gs[i,j])
+            for s in result[region][state][score]:
+                ax.plot(respTrunc,s,'k')
             for side in ('right','top'):
                 ax.spines[side].set_visible(False)
             ax.tick_params(direction='out',top=False,right=False)
-            for s in result[region][state][score]:
-                ax.plot(respTrunc,s,'k')
             ax.set_xticks([0,50,100,150,200])
             ax.set_yticks([0,0.25,0.5,0.75,1])
             ax.set_xlim([0,200])
@@ -343,17 +348,17 @@ for score,ymin in zip(('changeScore','imageScore'),[0.45,0]):
     
 # plot avg score for each area
 regionColors = matplotlib.cm.jet(np.linspace(0,1,len(regionLabels)))
-plt.figure(facecolor='w')
-gs = matplotlib.gridspec.GridSpec(3,2)
+plt.figure(facecolor='w',figsize=(10,8))
+gs = matplotlib.gridspec.GridSpec(2,2)
 for i,(score,ymin) in enumerate(zip(('changeScore','imageScore'),(0.45,0))):
     for j,state in enumerate(('active','passive')):
         ax = plt.subplot(gs[i,j])
         for region,clr in zip(regionLabels,regionColors):
-            regionScores = np.array([s for s in result[region][state][score]])
-            if len(regionScores)>0:
-                m = regionScores.mean(axis=0)
-                print(m)
-                ax.plot(respTrunc,m,color=clr)
+            regionScore = np.array([s for s in result[region][state][score]])
+            n = len(regionScore)
+            if n>0:
+                m = regionScore.mean(axis=0)
+                ax.plot(respTrunc,m,color=clr,label=region+'(n='+str(n)+')')
         for side in ('right','top'):
             ax.spines[side].set_visible(False)
         ax.tick_params(direction='out',top=False,right=False)
@@ -370,10 +375,70 @@ for i,(score,ymin) in enumerate(zip(('changeScore','imageScore'),(0.45,0))):
             ax.set_ylabel('Decoder Accuracy ('+score[:score.find('S')]+')')
         else:
             ax.set_yticklabels([])
+        if i==1 and j==1:
+            ax.legend()
 
+# compare avg change and image scores for each area
+plt.figure(facecolor='w',figsize=(10,10))
+gs = matplotlib.gridspec.GridSpec(len(regionLabels),2)
+for i,region in enumerate(regionLabels):
+    for j,state in enumerate(('active','passive')):
+        ax = plt.subplot(gs[i,j])
+        for score,clr in zip(('changeScore','imageScore'),('k','0.5')):
+            regionScore = np.array([s for s in result[region][state][score]])
+            n = len(regionScore)
+            if n>0:
+                m = regionScore.mean(axis=0)
+                ax.plot(respTrunc,m,color=clr,label=score[:score.find('S')])
+        for side in ('right','top'):
+            ax.spines[side].set_visible(False)
+        ax.tick_params(direction='out',top=False,right=False)
+        ax.set_xticks([0,50,100,150,200])
+        ax.set_yticks([0,0.25,0.5,0.75,1])
+        ax.set_xlim([0,200])
+        ax.set_ylim([0,1])
+        if i<len(regionLabels)-1:
+            ax.set_xticklabels([])
+        if j==0:
+            ax.set_title(region)
+        else:
+            ax.set_yticklabels([])
+        if i==0 and j==0:
+            ax.set_ylabel('Decoder Accuracy')
+        if i==len(regionLabels)-1 and j==1:
+            ax.legend()
+ax.set_xlabel('Time (ms)')
 
-
-
+# plot active vs passive for each area and score
+plt.figure(facecolor='w',figsize=(10,10))
+gs = matplotlib.gridspec.GridSpec(len(regionLabels),2)
+for i,region in enumerate(regionLabels):
+    for j,(score,ymin) in enumerate(zip(('changeScore','imageScore'),(0.45,0))):
+        ax = plt.subplot(gs[i,j])
+        for state,clr in zip(('active','passive'),'rb'):
+            regionScore = np.array([s for s in result[region][state][score]])
+            n = len(regionScore)
+            if n>0:
+                m = regionScore.mean(axis=0)
+                ax.plot(respTrunc,m,color=clr,label=state)
+        for side in ('right','top'):
+            ax.spines[side].set_visible(False)
+        ax.tick_params(direction='out',top=False,right=False)
+        ax.set_xticks([0,50,100,150,200])
+        ax.set_yticks([0,0.25,0.5,0.75,1])
+        ax.set_xlim([0,200])
+        ax.set_ylim([ymin,1])
+        if i<len(regionLabels)-1:
+            ax.set_xticklabels([])
+        if j==0:
+            ax.set_title(region)
+        else:
+            ax.set_yticklabels([])
+        if i==0 and j==0:
+            ax.set_ylabel('Decoder Accuracy')
+        if i==len(regionLabels)-1 and j==1:
+            ax.legend()
+ax.set_xlabel('Time (ms)')
 
 
 
