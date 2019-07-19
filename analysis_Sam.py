@@ -273,7 +273,7 @@ for exp in data:
 
 nUnits = 20
 nRepeats = 5
-nCrossVal = 2
+nCrossVal = 5
 
 truncInterval = 5
 respTrunc = np.arange(truncInterval,201,truncInterval)
@@ -295,8 +295,9 @@ for expInd,exp in enumerate(data):
             hasSpikes = unitMeanSDFs.mean(axis=1)>0.1
             unitMeanSDFs -= unitMeanSDFs[:,baseWin].mean(axis=1)[:,None]
             hasResp = unitMeanSDFs[:,respWin].max(axis=1) > 5*unitMeanSDFs[:,baseWin].std(axis=1)
-            if inRegion.sum()>nUnits:
-                units = np.where(inRegion & hasSpikes & hasResp)[0]
+            useUnits = inRegion & hasSpikes & hasResp
+            if useUnits.sum()>nUnits:
+                units = np.where(useUnits)[0]
                 unitSamples = [np.random.choice(units,nUnits) for _ in range(nRepeats)]
                 for state in result[region]:
                     if state in data[exp]['sdfs'][probe] and len(data[exp]['sdfs'][probe][state]['change'])>0:
