@@ -280,11 +280,11 @@ for exp in data:
         print(probe,n)
         
 
-nUnits = [30]
+nUnits = [5,10,20,30,40,50]
 nRepeats = 5
 nCrossVal = 3
 
-truncInterval = 5
+truncInterval = 200
 lastTrunc = 200
 truncTimes = np.arange(truncInterval,lastTrunc+1,truncInterval)
 
@@ -355,6 +355,7 @@ for i,region in enumerate(regionLabels):
         ax.tick_params(direction='out',top=False,right=False)
         ax.set_xticks(np.arange(0,100,10))
         ax.set_yticks([0,0.25,0.5,0.75,1])
+        ax.set_yticklabels([0,'',0.5,'',1])
         ax.set_xlim([0,max(nUnits)])
         ax.set_ylim([ymin,1])
         if i<len(regionLabels)-1:
@@ -369,29 +370,36 @@ ax.set_xlabel('Number of Units)')
 
 # plot scores for each probe
 for score,ymin in zip(('changeScore','imageScore'),[0.45,0]):
-    plt.figure(facecolor='w',figsize=(10,10))
+    fig = plt.figure(facecolor='w',figsize=(10,10))
     gs = matplotlib.gridspec.GridSpec(len(regionLabels),2)
     for i,region in enumerate(regionLabels):
         for j,state in enumerate(('active','passive')):
             ax = plt.subplot(gs[i,j])
             for s in result[region][state][score]:
-                ax.plot(truncTime,s,'k')
+                ax.plot(truncTimes,s,'k')
             for side in ('right','top'):
                 ax.spines[side].set_visible(False)
             ax.tick_params(direction='out',top=False,right=False)
             ax.set_xticks([0,50,100,150,200])
             ax.set_yticks([0,0.25,0.5,0.75,1])
+            ax.set_yticklabels([0,'',0.5,'',1])
             ax.set_xlim([0,200])
             ax.set_ylim([ymin,1])
             if i<len(regionLabels)-1:
                 ax.set_xticklabels([])
-            if j==0:
+            if j>0:
+                ax.set_yticklabels([])    
+            if i==0:
+                if j==0:
+                    ax.set_title(region+', '+state)
+                else:
+                    ax.set_title(state)
+            elif j==0:
                 ax.set_title(region)
-            else:
-                ax.set_yticklabels([])
             if i==0 and j==0:
                 ax.set_ylabel('Decoder Accuracy')
     ax.set_xlabel('Time (ms)')
+    fig.text(0.5,0.95,score[:score.find('S')],fontsize=14,horizontalalignment='center')
     
 # plot avg score for each area
 regionColors = matplotlib.cm.jet(np.linspace(0,1,len(regionLabels)))
@@ -411,6 +419,7 @@ for i,(score,ymin) in enumerate(zip(('changeScore','imageScore'),(0.45,0))):
         ax.tick_params(direction='out',top=False,right=False)
         ax.set_xticks([0,50,100,150,200])
         ax.set_yticks([0,0.25,0.5,0.75,1])
+        ax.set_yticklabels([0,'',0.5,'',1])
         ax.set_xlim([0,200])
         ax.set_ylim([ymin,1])
         if i==0:
@@ -442,14 +451,20 @@ for i,region in enumerate(regionLabels):
         ax.tick_params(direction='out',top=False,right=False)
         ax.set_xticks([0,50,100,150,200])
         ax.set_yticks([0,0.25,0.5,0.75,1])
+        ax.set_yticklabels([0,'',0.5,'',1])
         ax.set_xlim([0,200])
         ax.set_ylim([0,1])
         if i<len(regionLabels)-1:
             ax.set_xticklabels([])
-        if j==0:
+        if j>0:
+            ax.set_yticklabels([])    
+        if i==0:
+            if j==0:
+                ax.set_title(region+', '+state)
+            else:
+                ax.set_title(state)
+        elif j==0:
             ax.set_title(region)
-        else:
-            ax.set_yticklabels([])
         if i==0 and j==0:
             ax.set_ylabel('Decoder Accuracy')
         if i==len(regionLabels)-1 and j==1:
@@ -473,14 +488,18 @@ for i,region in enumerate(regionLabels):
         ax.tick_params(direction='out',top=False,right=False)
         ax.set_xticks([0,50,100,150,200])
         ax.set_yticks([0,0.25,0.5,0.75,1])
+        ax.set_yticklabels([0,'',0.5,'',1])
         ax.set_xlim([0,200])
         ax.set_ylim([ymin,1])
         if i<len(regionLabels)-1:
-            ax.set_xticklabels([])
-        if j==0:
+            ax.set_xticklabels([])  
+        if i==0:
+            if j==0:
+                ax.set_title(region+', '+score[:score.find('S')])
+            else:
+                ax.set_title(score[:score.find('S')])
+        elif j==0:
             ax.set_title(region)
-        else:
-            ax.set_yticklabels([])
         if i==0 and j==0:
             ax.set_ylabel('Decoder Accuracy')
         if i==len(regionLabels)-1 and j==1:
@@ -489,24 +508,29 @@ ax.set_xlabel('Time (ms)')
 
 
 #
-response = data[exp]['response'][:]
-trials = (response=='hit') | (response=='miss')
-behavior = np.zeros(trials.sum())
-behavior[response[trials]=='hit']=1
-predictProb = changePredict[:len(behavior),1]
-predict = predictProb>0.5
-
-ax = plt.subplot(1,1,1)
-ax.plot(behavior,'k')
-ax.plot(predict,'b')
-ax.plot(predictProb,'r')
-
-plt.plot(predictProb,behavior,'o')
-
-predictProb[behavior==1].mean()
-
-prediceProb[behavior<1].mean()
-
-np.corrcoef(predictProb,behavior)
+for exp in data:
+    response = data[exp]['response'][:]
+    trials = (response=='hit') | (response=='miss')
+    behavior = np.zeros(trials.sum())
+    behavior[response[trials]=='hit']=1
+    
+    state = 'active'
+    for region in result:
+        if exp in result[region]['exps']:
+            predictProb = result[region][state]['changePredict'][result[region][state]['exps'].index(exp)][:len(behavior),1]
+            predict = predictProb>0.5
+    
+    ax = plt.subplot(1,1,1)
+    ax.plot(behavior,'k')
+    ax.plot(predict,'b')
+    ax.plot(predictProb,'r')
+    
+    plt.plot(predictProb,behavior,'o')
+    
+    predictProb[behavior==1].mean()
+    
+    prediceProb[behavior<1].mean()
+    
+    np.corrcoef(predictProb,behavior)
 
 
