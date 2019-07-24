@@ -280,17 +280,17 @@ for exp in data:
         print(probe,n)
         
 
-nUnits = [5,10,20,30,40,50]
-nRepeats = 5
+nUnits = [30] #[5,10,20,30,40,50]
+nRepeats = 3
 nCrossVal = 3
 
-truncInterval = 200
+truncInterval = 5
 lastTrunc = 200
 truncTimes = np.arange(truncInterval,lastTrunc+1,truncInterval)
 
 assert((len(nUnits)>=1 and len(truncTimes)==1) or (len(nUnits)==1 and len(truncTimes)>=1))
 model = RandomForestClassifier(n_estimators=100)
-result = {region: {state: {'exps':[],'changeScore':[],'imageScore':[],'changePredict':[]} for state in ('active','passive')} for region in regionLabels}
+result = {exp: {probe: {state: {'changeScore':[],'imageScore':[],'changePredict':[]} for state in ('active','passive')} for probe in data[exp]['sdfs']} for exp in data}
 for expInd,exp in enumerate(data):
     print('experiment '+str(expInd+1)+' of '+str(len(data.keys())))
     response = data[exp]['response'][:]
@@ -300,21 +300,21 @@ for expInd,exp in enumerate(data):
     for probeInd,probe in enumerate(data[exp]['sdfs']):
         print('probe '+str(probeInd+1)+' of '+str(len(data[exp]['sdfs'].keys())))
         region = data[exp]['isi'][probe].value
+        result[exp][probe]['region'] = region
         if region in regionLabels:
             inRegion = data[exp]['regions'][probe][:]==region
             if any(inRegion):
                 hasSpikesActive,hasRespActive = findResponsiveUnits(data[exp]['sdfs'][probe]['active']['change'][inRegion,:,baseWin.start:respWin.stop],baseWin,respWin)
                 useUnits = hasSpikesActive & hasRespActive
-                if 'passive' in result[region]:
-                    hasPassive = len(data[exp]['sdfs'][probe]['passive']['change'])>0
-                    if hasPassive:
-                        hasSpikesPassive,hasRespPassive = findResponsiveUnits(data[exp]['sdfs'][probe]['passive']['change'][inRegion,:,baseWin.start:respWin.stop],baseWin,respWin)
-                        useUnits = useUnits & hasSpikesPassive
+                hasPassive = len(data[exp]['sdfs'][probe]['passive']['change'])>0
+                if hasPassive:
+                    hasSpikesPassive,hasRespPassive = findResponsiveUnits(data[exp]['sdfs'][probe]['passive']['change'][inRegion,:,baseWin.start:respWin.stop],baseWin,respWin)
+                    useUnits = useUnits & hasSpikesPassive
                 units = np.where(useUnits)[0]
                 for n in nUnits:
                     if len(units)>=n:
                         unitSamples = [np.random.choice(units,size=n,replace=False) for _ in range(nRepeats)]
-                        for state in result[region]:
+                        for state in ('active','passive'):
                             if state=='active' or hasPassive:
                                 changeScore = np.zeros((nRepeats,len(truncTimes)))
                                 changePredict = []
@@ -335,21 +335,28 @@ for expInd,exp in enumerate(data):
                                         X = np.concatenate([s.reshape((s.shape[0],-1)) for s in imgSDFs])
                                         y = np.concatenate([np.zeros(s.shape[0])+imgNum for imgNum,s in enumerate(imgSDFs)])
                                         imageScore[i,j] = cross_val_score(model,X,y,cv=nCrossVal).mean()
-                                result[region][state]['exps'].append(exp)
-                                result[region][state]['changeScore'].append(changeScore.mean(axis=0))
-                                result[region][state]['imageScore'].append(imageScore.mean(axis=0))
-                                result[region][state]['changePredict'].append(np.mean(changePredict,axis=0))
+                                result[exp][probe][state]['changeScore'].append(changeScore.mean(axis=0))
+                                result[exp][probe][state]['imageScore'].append(imageScore.mean(axis=0))
+                                result[exp][probe][state]['changePredict'].append(np.mean(changePredict,axis=0))
                             
 
 # plot scores vs number of units
 plt.figure(facecolor='w',figsize=(10,10))
 gs = matplotlib.gridspec.GridSpec(len(regionLabels),2)
+allScores = {score: [] for score in ('changeScore','imageScore')}
 for i,region in enumerate(regionLabels):
     for j,(score,ymin) in enumerate(zip(('changeScore','imageScore'),(0.45,0))):
         ax = plt.subplot(gs[i,j])
-        for exp in data:
-            expScore = [s for ind,s in enumerate(result[region]['active'][score]) if result[region]['active']['exps'][ind]==exp]
-            ax.plot(nUnits[:len(expScore)],expScore[:len(nUnits)],'k')
+        expScores = []
+        for exp in result:
+            for probe in result[exp]:
+                if 'region' in result[exp][probe] and result[exp][probe]['region']==region:
+                    scr = [s[0] for s in result[exp][probe]['active'][score]]
+                    scr += [np.nan]*(len(nUnits)-len(scr))
+                    expScores.append(scr)
+                    allScores[score].append(scr)
+                    ax.plot(nUnits,scr,'k')
+        ax.plot(nUnits,np.nanmean(expScores,axis=0),'r',linewidth=2)
         for side in ('right','top'):
                 ax.spines[side].set_visible(False)
         ax.tick_params(direction='out',top=False,right=False)
@@ -359,14 +366,35 @@ for i,region in enumerate(regionLabels):
         ax.set_xlim([0,max(nUnits)])
         ax.set_ylim([ymin,1])
         if i<len(regionLabels)-1:
-            ax.set_xticklabels([])
-        if j==0:
+            ax.set_xticklabels([])  
+        if i==0:
+            if j==0:
+                ax.set_title(region+', '+score[:score.find('S')])
+            else:
+                ax.set_title(score[:score.find('S')])
+        elif j==0:
             ax.set_title(region)
-        else:
-            ax.set_yticklabels([])
         if i==0 and j==0:
             ax.set_ylabel('Decoder Accuracy')
-ax.set_xlabel('Number of Units)')
+ax.set_xlabel('Number of Units')
+
+plt.figure()
+for j,(score,ymin) in enumerate(zip(('changeScore','imageScore'),(0.45,0))):
+    ax = plt.subplot(1,2,j+1)
+    ax.plot(nUnits,np.nanmean(allScores[score],axis=0),'k')
+    for side in ('right','top'):
+        ax.spines[side].set_visible(False)
+    ax.tick_params(direction='out',top=False,right=False)
+    ax.set_xticks(np.arange(0,100,10))
+    ax.set_yticks([0,0.25,0.5,0.75,1])
+    ax.set_yticklabels([0,'',0.5,'',1])
+    ax.set_xlim([0,max(nUnits)])
+    ax.set_ylim([ymin,1])
+    ax.set_title(score)
+    ax.set_xlabel('Number of Units')
+    if j==0:
+        ax.set_ylabel('Decoder Accuracy')
+
 
 # plot scores for each probe
 for score,ymin in zip(('changeScore','imageScore'),[0.45,0]):
