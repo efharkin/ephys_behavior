@@ -153,11 +153,18 @@ for ir, r in enumerate(rds):
 
 
 #splitting up change and prechange sdfs by image
+def getValueByRegion(regionDict, key, region):
+    inRegion = np.array(regionDict['region'])==region
+    values = np.array(regionDict[key])[inRegion]
+    return values
+
 experiments = ['03212019_409096', '03262019_417882', '03272019_417882', '04042019_408528', '04052019_408528', '04102019_408527','04112019_408527', 
     '04252019_421323', '04262019_421323', '04302019_422856', '05162019_423749', '05172019_423749']
 
 hdf5dir = r"C:\Users\svc_ccg\Desktop\Data\analysis"
-regionDict = {r: [] for r in ['changePSTH', 'preChangePSTH', 'region', 'experiment', 'unitID', 'probeID']}
+
+rfFilter=False #if True, only take cells with significant RFs
+regionDict = {r: [] for r in ['changePSTH', 'preChangePSTH', 'hitLickPSTH', 'badLickPSTH', 'region', 'experiment', 'unitID', 'probeID']}
 for exp in experiments:
     print(exp)
     b = getData.behaviorEphys('Z:\\' + exp)
@@ -182,9 +189,16 @@ for exp in experiments:
         for u in probeSync.getOrderedUnits(b.units[pid]):
             spikes = b.units[pid][u]['times']
             
-            if np.sum(spikes<3600)<3600: #exclude cells that fire below 1Hz during task
+            #exclude cells that fire below 1Hz during task
+            if np.sum(spikes<3600)<3600: 
                 continue
             
+            #check if RF
+            if rfFilter:
+                rfmat = summaryPlots.plot_rf(b, spikes, plot=False, returnMat=True)
+                if rfmat[1].max() < 99.9:
+                    continue
+                
             changesdfs = []
             presdfs = []            
             for im in np.unique(preChangeIDs):
@@ -196,7 +210,10 @@ for exp in experiments:
 
                 changesdfs.append(imChangeSDF)
                 presdfs.append(imPrechangeSDF)
-
+                
+            #lick psth
+            hitLicks, badLicks = summaryPlots.plot_lick_triggered_fr(b, spikes, plot=False, returnSDF=True, sdfSigma=0.001)
+            
             region = b.probeCCF[pid]['ISIRegion'] if b.units[pid][u]['inCortex'] else b.units[pid][u]['ccfRegion']
             regionDict['region'].append(region)
             regionDict['experiment'].append(exp)
@@ -204,12 +221,14 @@ for exp in experiments:
             regionDict['changePSTH'].append(changesdfs)
             regionDict['unitID'].append(u)
             regionDict['probeID'].append(pid)
-
+            regionDict['hitLickPSTH'].append(hitLicks)
+            regionDict['badLickPSTH'].append(badLicks)
 
 
 responseWindow = slice(270,580)
 changeModDict = {r:{'pref':[], 'all':[]} for r in np.unique(regionDict['region'])}
 for r in np.unique(regionDict['region']):
+for r in ['MRN', 'MB']:
     inRegion = np.array(regionDict['region'])==r
     print(r + ': ' + str(np.sum(inRegion)))
     
@@ -264,67 +283,10 @@ for r in np.unique(regionDict['region']):
 #    print('pre change sparseness: ' + str(np.mean(pre_sparseness)))
     
     
-# only take cells with RF
-#splitting up change and prechange sdfs by image
-experiments = ['03212019_409096', '03262019_417882', '03272019_417882', '04042019_408528', '04052019_408528', '04102019_408527','04112019_408527', 
-    '04252019_421323', '04262019_421323', '04302019_422856', '05162019_423749', '05172019_423749']
-
-hdf5dir = r"C:\Users\svc_ccg\Desktop\Data\analysis"
-regionDict = {r: [] for r in ['changePSTH', 'preChangePSTH', 'region', 'experiment', 'unitID', 'probeID']}
-for exp in experiments:
-    print(exp)
-    b = getData.behaviorEphys('Z:\\' + exp)
-    h5FilePath = glob.glob(os.path.join(hdf5dir, exp+'*'))[0]
-    b.loadFromHDF5(h5FilePath) 
-    b.getRFandFlashStimInfo()
-    
-    selectedTrials = (b.hit | b.miss)&(~b.ignore)
-    changeTimes = b.frameAppearTimes[np.array(b.trials['change_frame'][selectedTrials]).astype(int)+1] #add one to correct for change frame indexing problem
-    image_flash_times = b.frameAppearTimes[np.array(b.core_data['visual_stimuli']['frame'])]
-    image_id = np.array(b.core_data['visual_stimuli']['image_name'])
-    preChangeIndices = np.searchsorted(image_flash_times, changeTimes)-1
-    preChangeTimes = image_flash_times[preChangeIndices]
-    preChangeIDs = image_id[preChangeIndices]
-    changeIDs = image_id[preChangeIndices+1] #double check to make sure this worked
-    
-    regionsOfInterest = ['VISam', 'VISpm', 'VISp', 'VISl', 'VISal', 'VISrl']
-    preTime = 0.25
-    postTime = 0.5
-
-    for pid in b.probes_to_analyze:
-        for u in probeSync.getOrderedUnits(b.units[pid]):
-            spikes = b.units[pid][u]['times']
-            
-            if np.sum(spikes<3600)<1800: #exclude cells that fire below 0.5Hz during task
-                continue
-            
-            #check if RF
-            rfmat = summaryPlots.plot_rf(b, spikes, plot=False, returnMat=True)
-            if rfmat[1].max() < 99.9:
-                continue
-            
-            changesdfs = []
-            presdfs = []            
-            for im in np.unique(preChangeIDs):
-                imPrechangeTimes = preChangeTimes[preChangeIDs==im]
-                imChangeTimes = changeTimes[changeIDs==im]
-
-                imPrechangeSDF, time = getSDF(spikes, imPrechangeTimes-preTime, preTime+postTime, sigma=0.001)
-                imChangeSDF, time = getSDF(spikes, imChangeTimes-preTime, preTime+postTime, sigma=0.001)
-
-                changesdfs.append(imChangeSDF)
-                presdfs.append(imPrechangeSDF)
-
-            region = b.probeCCF[pid]['ISIRegion'] if b.units[pid][u]['inCortex'] else b.units[pid][u]['ccfRegion']
-            regionDict['region'].append(region)
-            regionDict['experiment'].append(exp)
-            regionDict['preChangePSTH'].append(presdfs)
-            regionDict['changePSTH'].append(changesdfs)
-            regionDict['unitID'].append(u)
-            regionDict['probeID'].append(pid)
 
 regiondf = pd.DataFrame.from_dict(regionDict)
 
+#plot change mod hierarchy
 fig, ax = plt.subplots()
 for i, r in enumerate(['VISp', 'VISl', 'VISal', 'VISrl', 'VISpm', 'VISam']):
     all_c = np.squeeze(changeModDict[r]['all'])
@@ -337,3 +299,23 @@ for i, r in enumerate(['VISp', 'VISl', 'VISal', 'VISrl', 'VISpm', 'VISam']):
     ax.errorbar(i, np.nanmean(pref_c), np.nanstd(pref_c)/(np.sum(~np.isnan(pref_c)))**0.5, c='g')
 
 ax.set_xticklabels(['', 'VISp', 'VISl', 'VISal', 'VISrl', 'VISpm', 'VISam'])
+
+
+#plot response aligned to first licks
+#for i, r in enumerate(['VISp', 'VISl', 'VISal', 'VISrl', 'VISpm', 'VISam', 'MRN', 'MB']):
+for r in np.unique(regionDict['region']):
+    fig, ax = plt.subplots()
+    fig.suptitle(r)
+    h = getValueByRegion(regionDict, 'hitLickPSTH', r)
+    b = getValueByRegion(regionDict, 'changePSTH', r)
+    b = b.mean(axis=1)
+    ax.plot(h.mean(axis=0))
+    ax.plot(b.mean(axis=0))
+    
+    
+    
+    
+    
+    
+
+

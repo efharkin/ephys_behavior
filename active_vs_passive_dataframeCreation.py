@@ -12,19 +12,33 @@ from matplotlib import pyplot as plt
 import probeSync
 import summaryPlots
 import pandas as pd
+from probeData import formatFigure
+import scipy.stats
 
-def findFano(sdfs, usepeak=True, responseStart=270, responseEnd=520):
+def findFano(sdfs, usepeak=False, responseStart=270, responseEnd=520):
     if type(sdfs) is list:
         sdfs = np.array(sdfs)
     responseWindow = slice(responseStart, responseEnd)
-    if usepeak:
-        resps = sdfs[:, responseWindow].max(axis=1)
-    else:
-        resps = sdfs[:, responseWindow].mean(axis=1)
+    try:
+        if usepeak:
+            resps = sdfs[:, responseWindow].max(axis=1)
+        else:
+            resps = sdfs[:, responseWindow].mean(axis=1)
         
-    return resps.std()**2/resps.mean()
+        return resps.var()/resps.mean()
     
+    except:
+        return np.nan
     
+
+def determineResponsive(psth, responseSlice=slice(270,520), baselineSlice=slice(0,250), stdthreshold=5):
+    ''' psth should be trialtype X mean response'''
+    responsive = [(p[responseSlice].max() - p[baselineSlice].mean())>stdthreshold*p[baselineSlice].std() for p in psth]
+    
+#    responsive = [scipy.stats.wilcoxon(p[baselineSlice], p[responseSlice])[1] for p in psth]
+    
+#    return any([r < (pthresh/psth.shape[0]) for r in responsive])
+    return any(responsive)
 
 experiments = ['04042019_408528', '04052019_408528', '04102019_408527','04112019_408527', 
     '04252019_421323', '04262019_421323', '04302019_422856', '05162019_423749', '05172019_423749']
@@ -40,7 +54,7 @@ preTime = 0.25
 postTime = 0.5        
 responseWindow = slice(270,520)
 baseline = slice(0, 250)
-for exp, imset in zip([experiments[0]], [im_set[0]]):
+for exp, imset in zip(experiments[1:], im_set[1:]):
     print(exp)
     b = getData.behaviorEphys('Z:\\' + exp)
     
@@ -91,12 +105,13 @@ for exp, imset in zip([experiments[0]], [im_set[0]]):
     
                     changesdfs.append(imChangeSDF)
                     presdfs.append(imPrechangeSDF)
-                    changeFano.append(findFano(imChangeSDF - np.mean(imChangeSDF[:, baseline], axis=1)[:, None]))
-                    preChangeFano.append(findFano(imPrechangeSDF - np.mean(imPrechangeSDF[:, baseline], axis=1)[:, None]))
+#                    changeFano.append(findFano(imChangeSDF - np.mean(imChangeSDF[:, baseline], axis=1)[:, None]))
+#                    preChangeFano.append(findFano(imPrechangeSDF - np.mean(imPrechangeSDF[:, baseline], axis=1)[:, None]))
+                    changeFano.append(findFano(imChangeSDF))
+                    preChangeFano.append(findFano(imPrechangeSDF))
                 
                 changeMean = np.array([s.mean(axis=0) for s in changesdfs])
                 preChangeMean = np.array([s.mean(axis=0) for s in presdfs])
-                
                 changeMean_sub = changeMean - np.mean(changeMean[:, baseline], axis=1)[:, None]
                 preChangeMean_sub = preChangeMean - np.mean(preChangeMean[:, baseline], axis=1)[:, None]
                     
@@ -117,4 +132,132 @@ for exp, imset in zip([experiments[0]], [im_set[0]]):
             
 
 regiondf = pd.DataFrame.from_dict(regionDict)
+
+
+
+#compare baseline and resp amp across active/passive epochs
+for state in ['active', 'passive']:
+    for psth in ['changePSTH', 'preChangePSTH']:
+        psths = regiondf[state + '_' + psth].values
+        pmeans = np.array([p.mean(axis=0) for p in psths])
+        baselines = pmeans[:, baseline].mean(axis=1)
+        respAmp = pmeans[:, responseWindow].max(axis=1) - baselines
+        
+        regiondf[state + '_' + psth + '_baseline'] = baselines
+        regiondf[state + '_' + psth + '_responseAmplitude'] = respAmp
+        
+
+fig, ax = plt.subplots(2)
+for ir, r in enumerate(np.unique(regionDict['region'])):
+    for state, color in zip(['active', 'passive'], ['r', 'b']):
+        for psth, alpha in zip(['changePSTH', 'preChangePSTH'], [1, 0.5]):
+            baselines = regiondf.loc[regiondf['region']==r, state + '_' + psth + '_baseline']    
+            respAmp = regiondf.loc[regiondf['region']==r, state + '_' + psth + '_responseAmplitude']
+            
+            ax[0].plot(ir, baselines.mean(), color+'o', alpha=alpha)
+            ax[1].plot(ir, respAmp.mean(), color+'o', alpha=alpha)
+
+ax[0].set_xticks(np.arange(len(np.unique(regionDict['region']))))
+ax[1].set_xticks(np.arange(len(np.unique(regionDict['region']))))
+ax[0].set_xticklabels(np.unique(regionDict['region']), rotation=90)
+ax[1].set_xticklabels(np.unique(regionDict['region']), rotation=90)
+
+[a.set_xlim([0.5,len(np.unique(regionDict['region']))]) for a in ax]
+[formatFigure(fig, a, yLabel=label) for a,label in zip(ax, ['baseline FR (Hz)', 'Resp. Amp. (Hz)'])]
+
+
+#Active vs Passive pop response across areas
+regionsOfInterest = ['VISp', 'VISl', 'VISal', 'VISrl', 'VISpm', 'VISam']
+time = np.arange(-250, 500)
+fig, ax = plt.subplots(1, len(regionsOfInterest))
+for r, a in zip(regionsOfInterest, ax):
+    
+    df = regiondf.loc[(regiondf['region']==r)]
+    
+    #find cells with sig change response
+    psths = df['active_changePSTH'].values
+    pmeans = np.array([p.mean(axis=0) for p in psths])
+    responsive = pmeans[:, responseWindow].max(axis=1) > 5*pmeans[:, baseline].std(axis=1)
+    
+    for state, color in zip(['active', 'passive'], ['r', 'b']):
+        
+#        for psth, alpha in zip(['changePSTH', 'preChangePSTH'], [1, 0.5]):
+        for psth, alpha in zip(['changePSTH'], [1]):
+            psths = df[state + '_' + psth].values
+            pmeans = np.array([p.mean(axis=0) for p in psths[responsive]])
+            
+            allmean = pmeans.mean(axis=0)
+            allsem = pmeans.std(axis=0)/pmeans.shape[0]**0.5
+            
+            a.plot(time, allmean, color)
+            a.fill_between(time, allmean+allsem, allmean-allsem, color=color, alpha=0.5)
+    
+    a.set_title(r)
+    a.text(-100, 19, str(np.sum(responsive)))
+    formatFigure(fig, a)
+
+ymax = np.max([a.get_ylim()[1] for a in ax])
+[a.set_ylim([0, ymax]) for a in ax]
+[a.axes.get_yaxis().set_visible(False) for a in ax[1:]]
+
+    
+
+#sparseness and reliability active vs passive
+regionsOfInterest = ['VISp', 'VISl', 'VISal', 'VISrl', 'VISpm', 'VISam']
+#regionsOfInterest = np.unique(regionDict['region'])
+time = np.arange(-250, 500)
+fig, ax = plt.subplots(2)
+figsp, axsp = plt.subplots()
+respSTDthresh = 10
+for ir, r in enumerate(regionsOfInterest):
+    
+    df = regiondf.loc[(regiondf['region']==r)&(regiondf['rfpvalue']==100)]
+    
+    #find cells with sig change response
+    psths = df['active_changePSTH'].values
+    pmeans = np.array([p.mean(axis=0) for p in psths])
+    pmeans_sub = pmeans - pmeans[:, baseline].mean(axis=1)[:, None]
+    responsive = [determineResponsive(p, stdthreshold=respSTDthresh) for p in psths]
+    
+    
+#    rfig, rax = plt.subplots()
+#    rfig.suptitle(r)
+#    ppeaks = [p[:, responseWindow].max(axis=1) for p in psths[responsive]]
+#    rax.imshow(ppeaks, cmap='plasma', aspect='auto')
+    
+    
+    for state, color in zip(['active', 'passive'], ['r', 'b']):
+        for resp, alpha in zip(['change', 'preChange'], [1, 0.5]):
+            sparseness = df[state+'_'+resp+'Sparseness'].values[responsive]
+            fano = df[state+'_'+resp+'Fano'].values[responsive]
+            fano = np.array([np.nanmean(f) for f in fano])
+            
+            ax[0].plot(ir, np.nanmean(sparseness), color+'o', alpha=alpha)
+            ax[1].plot(ir, np.nanmean(fano), color+'o', alpha=alpha)
+            
+    for imageSet, color in zip(['A', 'B'], ['k', 'g']):
+        imdf = df.loc[df['imageSet']==imageSet]
+        psths = imdf['active_changePSTH'].values
+        pmeans = np.array([p.mean(axis=0) for p in psths])
+        pmeans_sub = pmeans - pmeans[:, baseline].mean(axis=1)[:, None]
+        responsivesp = [determineResponsive(p, stdthreshold=respSTDthresh) for p in psths]
+        print(r+imageSet+ ': ' + str(np.sum(responsivesp)))
+        for resp, alpha in zip(['change', 'preChange'], [1, 0.5]):
+            sparseness = imdf['active_'+resp+'Sparseness'].values[responsivesp]
+            axsp.plot(ir, np.nanmean(sparseness), color+'o', alpha=alpha)
+
+formatFigure(figsp, axsp)
+axsp.set_xticks(np.arange(len(regionsOfInterest)))
+axsp.set_xticklabels(regionsOfInterest, rotation=90) 
+
+ax[0].set_xticks(np.arange(len(regionsOfInterest)))
+ax[1].set_xticks(np.arange(len(regionsOfInterest)))
+ax[0].set_xticklabels(regionsOfInterest, rotation=90)
+ax[1].set_xticklabels(regionsOfInterest, rotation=90)
+
+#[a.set_xlim([0.5,len(np.unique(regionDict['region']))]) for a in ax]
+[formatFigure(fig, a, yLabel=label) for a,label in zip(ax, ['Lifetime Sparseness', 'Fano Factor'])]  
+    
+    
+
 
