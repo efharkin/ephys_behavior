@@ -55,7 +55,7 @@ def objToHDF5(obj,filePath=None,fileOut=None,grp=None,saveDict=None):
             filePath = saveFile(fileType='*.hdf5')
             if filePath=='':
                 return
-        fileOut = h5py.File(filePath, 'w')
+        fileOut = h5py.File(filePath,'a')
         newFile = fileOut
     else:
         newFile = None
@@ -89,7 +89,7 @@ def hdf5ToObj(obj,filePath=None,grp=None,loadDict=None):
             filePath = getFile(fileType='*.hdf5')
             if filePath=='':
                 return
-        grp = h5py.File(filePath)
+        grp = h5py.File(filePath,'r')
         newFile = grp
     else:
         newFile = None
