@@ -292,11 +292,11 @@ for exp in data:
             print(probe,n)
         
 
-nUnits = [5,10,15,20,30,40]
-nRepeats = 5
+nUnits = [20]
+nRepeats = 3
 nCrossVal = 3
 
-truncInterval = 200
+truncInterval = 5
 lastTrunc = 200
 truncTimes = np.arange(truncInterval,lastTrunc+1,truncInterval)
 
@@ -371,7 +371,7 @@ for i,region in enumerate(regionLabels):
         expScores = []
         for exp in result:
             for probe in result[exp]:
-                if result[exp][probe]['region']==region:
+                if 'region' in result[exp][probe] and result[exp][probe]['region']==region:
                     scr = [s[0] for s in result[exp][probe]['active'][score]]
                     scr += [np.nan]*(len(nUnits)-len(scr))
                     expScores.append(scr)
@@ -425,7 +425,7 @@ for score,ymin in zip(('changeScore','imageScore'),[0.45,0]):
             ax = plt.subplot(gs[i,j])
             for exp in result:
                 for probe in result[exp]:
-                    if result[exp][probe]['region']==region:
+                    if 'region' in result[exp][probe] and result[exp][probe]['region']==region:
                         for s in result[exp][probe][state][score]:
                             ax.plot(truncTimes,s,'k')
             for side in ('right','top'):
@@ -463,7 +463,7 @@ for i,(score,ymin) in enumerate(zip(('changeScore','imageScore'),(0.45,0))):
             regionScore = []
             for exp in result:
                 for probe in result[exp]:
-                    if result[exp][probe]['region']==region:
+                    if 'region' in result[exp][probe] and result[exp][probe]['region']==region:
                         s = result[exp][probe][state][score]
                         if len(s)>0:
                             regionScore.append(s[0])
@@ -501,7 +501,7 @@ for i,region in enumerate(regionLabels):
             regionScore = []
             for exp in result:
                 for probe in result[exp]:
-                    if result[exp][probe]['region']==region:
+                    if 'region' in result[exp][probe] and result[exp][probe]['region']==region:
                         s = result[exp][probe][state][score]
                         if len(s)>0:
                             regionScore.append(s[0])
@@ -544,7 +544,7 @@ for i,region in enumerate(regionLabels):
             regionScore = []
             for exp in result:
                 for probe in result[exp]:
-                    if result[exp][probe]['region']==region:
+                    if 'region' in result[exp][probe] and result[exp][probe]['region']==region:
                         s = result[exp][probe][state][score]
                         if len(s)>0:
                             regionScore.append(s[0])
@@ -580,7 +580,7 @@ latency = {exp: {region: {state: {} for state in ('active','passive')} for regio
 for exp in result:
     for probe in result[exp]:
         for region in regionLabels:
-            if result[exp][probe]['region']==region:
+            if 'region' in result[exp][probe] and result[exp][probe]['region']==region:
                 for state in ('active','passive'):
                     s = result[exp][probe][state]['respLatency']
                     if len(s)>0:
@@ -645,11 +645,13 @@ for i,key in enumerate(('resp','image','change')):
         ax.tick_params(direction='out',top=False,right=False)
         ax.set_ylim(alim)
         ax.set_xticks(np.arange(len(regionLabels)))
-        ax.set_xticklabels([])
+        if i==len(latencyLabels)-1:
+            ax.set_xticklabels(regionLabels)
+        else:
+            ax.set_xticklabels([])
         ax.set_ylabel(latencyLabels[key])
         if i==0:
             ax.set_title(state)
-    ax.set_xticklabels(regionLabels)
 
 
 # plot predicted vs actual performance
@@ -661,7 +663,7 @@ for exp in data:
     behavior[response[trials]=='miss'] = -1
     for probe in result[exp]:
         for region in regionLabels:
-            if result[exp][probe]['region']==region:
+            if 'region' in result[exp][probe] and result[exp][probe]['region']==region:
                 for state in ('active','passive'):
                     p = result[exp][probe][state]['changePredict']
                     if len(p)>0:
@@ -678,7 +680,7 @@ for state,clr,grayclr in zip(('active','passive'),'rb',([1,0.5,0.5],[0.5,0.5,1])
         y = [fracSame[exp][region][state] for region in regionLabels]
         plt.plot(x,y,color=grayclr)
     m = [np.nanmean([fracSame[exp][region][state] for exp in fracSame]) for region in regionLabels]
-    plt.plot(x,m,color=clr,label=state)
+    plt.plot(x,m,color=clr,linewidth=3,label=state)
 for side in ('right','top'):
     ax.spines[side].set_visible(False)
 ax.tick_params(direction='out',top=False,right=False)
@@ -689,9 +691,13 @@ ax.legend()
 
 
 for exp in fracSame:
-    y = [fracSame[exp][region][state] for region in regionLabels]
+    y = [fracSame[exp][region]['active'] for region in regionLabels]
     plt.figure()
-    plt.plot(x,y,color=grayclr)
+    ax = plt.subplot(1,1,1)
+    ax.plot(x,y,'k')
+    ax.set_xticks(x)
+    ax.set_xticklabels(regionLabels)
+    ax.set_title(exp)
 
 
 
