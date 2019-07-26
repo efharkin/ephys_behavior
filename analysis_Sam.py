@@ -129,6 +129,8 @@ def getUnitRegions(obj,probes='all'):
     
 def findLatency(data,baseWin=None,respWin=None,method='rel',thresh=3,minPtsAbove=30):
     latency = []
+    if len(data.shape)<2:
+        data = data[None,:]
     if baseWin is not None:
         data = data-data[:,baseWin].mean(axis=1)[:,None]
     if respWin is None:
@@ -256,11 +258,11 @@ from sklearn.ensemble import RandomForestClassifier
 from sklearn.model_selection import cross_val_score, cross_val_predict
 
 
-def findResponsiveUnits(sdfs,baseWin,respWin):
+def findResponsiveUnits(sdfs,baseWin,respWin,thresh=10):
     unitMeanSDFs = np.array([s.mean(axis=0) for s in sdfs])
     hasSpikes = unitMeanSDFs.mean(axis=1)>0.1
     unitMeanSDFs -= unitMeanSDFs[:,baseWin].mean(axis=1)[:,None]
-    hasResp = unitMeanSDFs[:,respWin].max(axis=1) > 5*unitMeanSDFs[:,baseWin].std(axis=1)
+    hasResp = unitMeanSDFs[:,respWin].max(axis=1) > thresh*unitMeanSDFs[:,baseWin].std(axis=1)
     return hasSpikes,hasResp
 
 
@@ -275,38 +277,45 @@ for exp in data:
     print(exp)
     response = data[exp]['response'][:]
     trials = (response=='hit') | (response=='miss')
-    for probe in data[exp]['regions']:
-        n = []
-        for region in regionLabels:
-            inRegion = data[exp]['regions'][probe][:]==region
-            if any(inRegion):
-                sdfs = data[exp]['sdfs'][probe]['active']['change'][inRegion,:,baseWin.start:respWin.stop][:,trials]
-                hasSpikes,hasResp = findResponsiveUnits(sdfs,baseWin,respWin)
-                n.append(np.sum(hasSpikes & hasResp))
-            else:
-                n.append(0)
-        print(probe,n)
+    for thresh in (5,10,15):
+        print(thresh)
+        for probe in data[exp]['regions']:
+            n = []
+            for region in regionLabels:
+                inRegion = data[exp]['regions'][probe][:]==region
+                if any(inRegion):
+                    sdfs = data[exp]['sdfs'][probe]['active']['change'][inRegion,:,baseWin.start:respWin.stop][:,trials]
+                    hasSpikes,hasResp = findResponsiveUnits(sdfs,baseWin,respWin,thresh)
+                    n.append(np.sum(hasSpikes & hasResp))
+                else:
+                    n.append(0)
+            print(probe,n)
         
 
-nUnits = [30] #[5,10,20,30,40,50]
-nRepeats = 3
+nUnits = [5,10,15,20,30,40]
+nRepeats = 5
 nCrossVal = 3
 
-truncInterval = 5
+truncInterval = 200
 lastTrunc = 200
 truncTimes = np.arange(truncInterval,lastTrunc+1,truncInterval)
 
 assert((len(nUnits)>=1 and len(truncTimes)==1) or (len(nUnits)==1 and len(truncTimes)>=1))
 model = RandomForestClassifier(n_estimators=100)
-result = {exp: {probe: {state: {'changeScore':[],'changePredict':[],'imageScore':[],'respLatency':[]} for state in ('active','passive')} for probe in data[exp]['sdfs']} for exp in data}
+behavStates = ('active','passive')
+result = {exp: {probe: {state: {'changeScore':[],'changePredict':[],'imageScore':[],'respLatency':[]} for state in behavStates} for probe in data[exp]['sdfs']} for exp in data}
 for expInd,exp in enumerate(data):
-    print('experiment '+str(expInd+1)+' of '+str(len(data.keys())))
+    print('experiment '+str(expInd+1)+' of '+str(len(data)))
+    if 'passive' in behavStates:
+        hasPassive = len(data[exp]['sdfs'][data[exp]['sdfs'].keys()[0]]['passive']['change'])>0
+        if not hasPassive:
+            continue
     response = data[exp]['response'][:]
     trials = (response=='hit') | (response=='miss')
     changeImage = data[exp]['changeImage'][trials]
     imageNames = np.unique(changeImage)
     for probeInd,probe in enumerate(data[exp]['sdfs']):
-        print('probe '+str(probeInd+1)+' of '+str(len(data[exp]['sdfs'].keys())))
+        print('probe '+str(probeInd+1)+' of '+str(len(data[exp]['sdfs'])))
         region = data[exp]['isi'][probe].value
         result[exp][probe]['region'] = region
         if region in regionLabels:
@@ -314,15 +323,14 @@ for expInd,exp in enumerate(data):
             if any(inRegion):
                 hasSpikesActive,hasRespActive = findResponsiveUnits(data[exp]['sdfs'][probe]['active']['change'][inRegion,:,baseWin.start:respWin.stop][:,trials],baseWin,respWin)
                 useUnits = hasSpikesActive & hasRespActive
-                hasPassive = len(data[exp]['sdfs'][probe]['passive']['change'])>0
-                if hasPassive:
+                if 'passive' in behavStates:
                     hasSpikesPassive,hasRespPassive = findResponsiveUnits(data[exp]['sdfs'][probe]['passive']['change'][inRegion,:,baseWin.start:respWin.stop][:,trials],baseWin,respWin)
                     useUnits = useUnits & hasSpikesPassive
                 units = np.where(useUnits)[0]
                 for n in nUnits:
                     if len(units)>=n:
                         unitSamples = [np.random.choice(units,size=n,replace=False) for _ in range(nRepeats)]
-                        for state in ('active','passive'):
+                        for state in behavStates:
                             if state=='active' or hasPassive:
                                 changeScore = np.zeros((nRepeats,len(truncTimes)))
                                 changePredict = []
@@ -376,7 +384,7 @@ for i,region in enumerate(regionLabels):
         ax.set_xticks(np.arange(0,100,10))
         ax.set_yticks([0,0.25,0.5,0.75,1])
         ax.set_yticklabels([0,'',0.5,'',1])
-        ax.set_xlim([0,max(nUnits)])
+        ax.set_xlim([0,max(nUnits)+5])
         ax.set_ylim([ymin,1])
         if i<len(regionLabels)-1:
             ax.set_xticklabels([])  
@@ -391,22 +399,21 @@ for i,region in enumerate(regionLabels):
             ax.set_ylabel('Decoder Accuracy')
 ax.set_xlabel('Number of Units')
 
-plt.figure()
-for j,(score,ymin) in enumerate(zip(('changeScore','imageScore'),(0.45,0))):
-    ax = plt.subplot(1,2,j+1)
-    ax.plot(nUnits,np.nanmean(allScores[score],axis=0),'k')
-    for side in ('right','top'):
-        ax.spines[side].set_visible(False)
-    ax.tick_params(direction='out',top=False,right=False)
-    ax.set_xticks(np.arange(0,100,10))
-    ax.set_yticks([0,0.25,0.5,0.75,1])
-    ax.set_yticklabels([0,'',0.5,'',1])
-    ax.set_xlim([0,max(nUnits)])
-    ax.set_ylim([ymin,1])
-    ax.set_title(score)
-    ax.set_xlabel('Number of Units')
-    if j==0:
-        ax.set_ylabel('Decoder Accuracy')
+plt.figure(facecolor='w')
+ax = plt.subplot(1,1,1)
+for score,clr in zip(('changeScore','imageScore'),('k','0.5')):
+    ax.plot(nUnits,np.nanmean(allScores[score],axis=0),color=clr,label=score[:score.find('S')])
+for side in ('right','top'):
+    ax.spines[side].set_visible(False)
+ax.tick_params(direction='out',top=False,right=False)
+ax.set_xticks(np.arange(0,100,10))
+ax.set_yticks([0,0.25,0.5,0.75,1])
+ax.set_yticklabels([0,'',0.5,'',1])
+ax.set_xlim([0,max(nUnits)+5])
+ax.set_ylim([0,1])
+ax.set_xlabel('Number of Units')
+ax.set_ylabel('Decoder Accuracy')
+ax.legend()
 
 
 # plot scores for each probe
@@ -457,10 +464,12 @@ for i,(score,ymin) in enumerate(zip(('changeScore','imageScore'),(0.45,0))):
             for exp in result:
                 for probe in result[exp]:
                     if result[exp][probe]['region']==region:
-                        regionScore.append(result[exp][probe][state][score])
+                        s = result[exp][probe][state][score]
+                        if len(s)>0:
+                            regionScore.append(s[0])
             n = len(regionScore)
             if n>0:
-                m = regionScore.mean(axis=0)
+                m = np.mean(regionScore,axis=0)
                 ax.plot(truncTimes,m,color=clr,label=region+'(n='+str(n)+')')
         for side in ('right','top'):
             ax.spines[side].set_visible(False)
@@ -493,10 +502,12 @@ for i,region in enumerate(regionLabels):
             for exp in result:
                 for probe in result[exp]:
                     if result[exp][probe]['region']==region:
-                        regionScore.append(result[exp][probe][state][score])
+                        s = result[exp][probe][state][score]
+                        if len(s)>0:
+                            regionScore.append(s[0])
             n = len(regionScore)
             if n>0:
-                m = regionScore.mean(axis=0)
+                m = np.mean(regionScore,axis=0)
                 ax.plot(truncTimes,m,color=clr,label=score[:score.find('S')])
         for side in ('right','top'):
             ax.spines[side].set_visible(False)
@@ -534,10 +545,12 @@ for i,region in enumerate(regionLabels):
             for exp in result:
                 for probe in result[exp]:
                     if result[exp][probe]['region']==region:
-                        regionScore.append(result[exp][probe][state][score])
+                        s = result[exp][probe][state][score]
+                        if len(s)>0:
+                            regionScore.append(s[0])
             n = len(regionScore)
             if n>0:
-                m = regionScore.mean(axis=0)
+                m = np.mean(regionScore,axis=0)
                 ax.plot(truncTimes,m,color=clr,label=state)
         for side in ('right','top'):
             ax.spines[side].set_visible(False)
@@ -563,60 +576,123 @@ for i,region in enumerate(regionLabels):
 ax.set_xlabel('Time (ms)')
 
 # plot visual response, change decoding, and image decoding latencies
-plt.figure(facecolor='w',figsize=(10,10))
-latency = {'region': {state: {'resp':[],'change':[],'image':[]}}}
-for region in regionLabels:
-    for exp in result:
-        for probe in result[exp]:
+latency = {exp: {region: {state: {} for state in ('active','passive')} for region in regionLabels} for exp in result}
+for exp in result:
+    for probe in result[exp]:
+        for region in regionLabels:
             if result[exp][probe]['region']==region:
                 for state in ('active','passive'):
-                    latency[region][state]['resp'].append(result[exp][probe][state]['respLatency'])
-                    for score,decodeThresh in zip(('changeScore','imageScore'),(0.5,0.125)):
-                        intpScore = np.interp(truncTimes,np.arange(truncTimes[0],truncTimes[-1]+1),result[exp][probe][state][score])
-                        latency[region][state][score[:score.find('S')]].append(findLatency(intpScore,method='abs',thresh=decodeThresh))
+                    s = result[exp][probe][state]['respLatency']
+                    if len(s)>0:
+                        latency[exp][region][state]['resp'] = s[0]
+                    for score,decodeThresh in zip(('changeScore','imageScore'),(0.625,0.25)):
+                        s = result[exp][probe][state][score]
+                        if len(s)>0:
+                            intpScore = np.interp(np.arange(truncTimes[0],truncTimes[-1]+1),truncTimes,s[0])
+                            latency[exp][region][state][score[:score.find('S')]] = findLatency(intpScore,method='abs',thresh=decodeThresh)[0]
 
-plt.figure()
+latencyLabels = {'resp':'Visual Response Latency','change':'Change Decoding Latency','image':'Image Decoding Latency'}
+
+plt.figure(facecolor='w',figsize=(10,10))
 gs = matplotlib.gridspec.GridSpec(3,2)
-label = {'resp':'Visual Response Latency','change':'Change Decoding Latency','image':'Image Decoding Latency'}
-for i,(x,y) in enumerate((('resp','change'),('resp','image'),('change','image'))):
+axes = []
+latMin = 1000
+latMax = 0
+for i,(xkey,ykey) in enumerate((('resp','change'),('resp','image'),('change','image'))):
     for j,state in enumerate(('active','passive')):
         ax = plt.subplot(gs[i,j])
+        axes.append(ax)
+        ax.plot([0,1000],[0,1000],'--',color='0.5')
         for region,clr in zip(regionLabels,regionColors):
-            ax.plot(latency[region][state][x],latency[region][state][y],'o',color=clr)
+            x,y = [[latency[exp][region][state][key] for exp in latency if key in latency[exp][region][state]] for key in (xkey,ykey)]
+            latMin = min(latMin,min(x),min(y))
+            latMax = max(latMax,max(x),max(y))
+            ax.plot(x,y,'o',mec=clr,mfc='none')
+            mx,my = [np.mean(d) for d in (x,y)]
+            sx,sy = [np.std(d)/(len(d)**0.5) for d in (x,y)]
+            ax.plot(mx,my,'o',mec=clr,mfc=clr)
+            ax.plot([mx,mx],[my-sy,my+sy],color=clr)
+            ax.plot([mx-sx,mx+sx],[my,my],color=clr)
         for side in ('right','top'):
             ax.spines[side].set_visible(False)
         ax.tick_params(direction='out',top=False,right=False)
-        ax.set_xlabel(label[x])
-        ax.set_ylabel(label[y])
-                        
+        ax.set_xlabel(latencyLabels[xkey])
+        ax.set_ylabel(latencyLabels[ykey])
+        if i==0:
+            ax.set_title(state)
+alim = [latMin-5,latMax+5]
+for ax in axes:
+    ax.set_xlim(alim)
+    ax.set_ylim(alim)
+    ax.set_aspect('equal')
+plt.tight_layout()
+
+plt.figure(facecolor='w',figsize=(10,10))
+gs = matplotlib.gridspec.GridSpec(3,2)
+for i,key in enumerate(('resp','image','change')):
+    for j,state in enumerate(('active','passive')):
+        ax = plt.subplot(gs[i,j])
+        d = np.full((len(latency),len(regionLabels)),np.nan)
+        for expInd,exp in enumerate(latency):
+            z = [(r,latency[exp][region][state][key]) for r,region in enumerate(regionLabels) if key in latency[exp][region][state]]
+            if len(z)>0:
+                x,y = zip(*z)
+                ax.plot(x,y,'k')
+                d[expInd,list(x)] = y
+        plt.plot(np.nanmean(d,axis=0),'r',linewidth=2)
+        for side in ('right','top'):
+            ax.spines[side].set_visible(False)
+        ax.tick_params(direction='out',top=False,right=False)
+        ax.set_ylim(alim)
+        ax.set_xticks(np.arange(len(regionLabels)))
+        ax.set_xticklabels([])
+        ax.set_ylabel(latencyLabels[key])
+        if i==0:
+            ax.set_title(state)
+    ax.set_xticklabels(regionLabels)
 
 
-#
+# plot predicted vs actual performance
+fracSame = {exp: {region: {state: np.nan for state in ('active','passive')} for region in regionLabels} for exp in result}
 for exp in data:
     response = data[exp]['response'][:]
     trials = (response=='hit') | (response=='miss')
-    behavior = np.zeros(trials.sum())
-    behavior[response[trials]=='hit']=1
+    behavior = np.ones(trials.sum())
+    behavior[response[trials]=='miss'] = -1
+    for probe in result[exp]:
+        for region in regionLabels:
+            if result[exp][probe]['region']==region:
+                for state in ('active','passive'):
+                    p = result[exp][probe][state]['changePredict']
+                    if len(p)>0:
+                        predictProb = p[0]
+                        predict = (predictProb>0.5).astype(int)
+                        predict[predict==0] = -1
+                        fracSame[exp][region][state] = np.sum((behavior*predict)==1)/behavior.size
     
-    state = 'active'
-    for region in regionLabels:
-        if exp in result:
-            for probe in result[exp]:
-                if result[exp][probe]=='region':
-                    predictProb = result[exp][probe]['active']['changePredict']
-            predict = predictProb>0.5
-    
-    ax = plt.subplot(1,1,1)
-    ax.plot(behavior,'k')
-    ax.plot(predict,'b')
-    ax.plot(predictProb,'r')
-    
-    plt.plot(predictProb,behavior,'o')
-    
-    predictProb[behavior==1].mean()
-    
-    prediceProb[behavior<1].mean()
-    
-    np.corrcoef(predictProb,behavior)
+plt.figure(facecolor='w',figsize=(6,4))
+ax = plt.subplot(1,1,1)
+x = np.arange(len(regionLabels))
+for state,clr,grayclr in zip(('active','passive'),'rb',([1,0.5,0.5],[0.5,0.5,1])):
+    for exp in fracSame:
+        y = [fracSame[exp][region][state] for region in regionLabels]
+        plt.plot(x,y,color=grayclr)
+    m = [np.nanmean([fracSame[exp][region][state] for exp in fracSame]) for region in regionLabels]
+    plt.plot(x,m,color=clr,label=state)
+for side in ('right','top'):
+    ax.spines[side].set_visible(False)
+ax.tick_params(direction='out',top=False,right=False)
+ax.set_xticks(x)
+ax.set_xticklabels(regionLabels)
+ax.set_ylabel('Fraction Predicted')
+ax.legend()
+
+
+for exp in fracSame:
+    y = [fracSame[exp][region][state] for region in regionLabels]
+    plt.figure()
+    plt.plot(x,y,color=grayclr)
+
+
 
 
