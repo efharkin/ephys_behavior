@@ -292,7 +292,9 @@ for exp in data:
             print(probe,n)
         
 
-nUnits = [20]
+exps = ('04042019_408528','04102019_408527','04252019_421323','04302019_422856','05162019_423749')
+    
+nUnits = [19]
 nRepeats = 3
 nCrossVal = 3
 
@@ -607,7 +609,7 @@ for i,(xkey,ykey) in enumerate((('resp','change'),('resp','image'),('change','im
             x,y = [[latency[exp][region][state][key] for exp in latency if key in latency[exp][region][state]] for key in (xkey,ykey)]
             latMin = min(latMin,min(x),min(y))
             latMax = max(latMax,max(x),max(y))
-            ax.plot(x,y,'o',mec=clr,mfc='none')
+#            ax.plot(x,y,'o',mec=clr,mfc='none')
             mx,my = [np.mean(d) for d in (x,y)]
             sx,sy = [np.std(d)/(len(d)**0.5) for d in (x,y)]
             ax.plot(mx,my,'o',mec=clr,mfc=clr)
