@@ -284,7 +284,7 @@ for exp in data:
             for region in regionLabels:
                 inRegion = data[exp]['regions'][probe][:]==region
                 if any(inRegion):
-                    sdfs = data[exp]['sdfs'][probe]['active']['change'][inRegion,:,baseWin.start:respWin.stop][:,trials]
+                    sdfs = data[exp]['sdfs'][probe]['active']['change'][inRegion,:,:respWin.stop][:,trials]
                     hasSpikes,hasResp = findResponsiveUnits(sdfs,baseWin,respWin,thresh)
                     n.append(np.sum(hasSpikes & hasResp))
                 else:
@@ -302,10 +302,12 @@ truncInterval = 5
 lastTrunc = 200
 truncTimes = np.arange(truncInterval,lastTrunc+1,truncInterval)
 
+preTruncTimes = np.arange(-750,0,50)
+
 assert((len(nUnits)>=1 and len(truncTimes)==1) or (len(nUnits)==1 and len(truncTimes)>=1))
 model = RandomForestClassifier(n_estimators=100)
 behavStates = ('active','passive')
-result = {exp: {probe: {state: {'changeScore':[],'changePredict':[],'imageScore':[],'respLatency':[]} for state in behavStates} for probe in data[exp]['sdfs']} for exp in data}
+result = {exp: {probe: {state: {'changeScore':[],'changePredict':[],'imageScore':[],'preImageScore':[],'respLatency':[]} for state in behavStates} for probe in data[exp]['sdfs']} for exp in data}
 for expInd,exp in enumerate(data):
     print('experiment '+str(expInd+1)+' of '+str(len(data)))
     if 'passive' in behavStates:
@@ -323,10 +325,10 @@ for expInd,exp in enumerate(data):
         if region in regionLabels:
             inRegion = data[exp]['regions'][probe][:]==region
             if any(inRegion):
-                hasSpikesActive,hasRespActive = findResponsiveUnits(data[exp]['sdfs'][probe]['active']['change'][inRegion,:,baseWin.start:respWin.stop][:,trials],baseWin,respWin)
+                hasSpikesActive,hasRespActive = findResponsiveUnits(data[exp]['sdfs'][probe]['active']['change'][inRegion,:,:respWin.stop][:,trials],baseWin,respWin)
                 useUnits = hasSpikesActive & hasRespActive
                 if 'passive' in behavStates:
-                    hasSpikesPassive,hasRespPassive = findResponsiveUnits(data[exp]['sdfs'][probe]['passive']['change'][inRegion,:,baseWin.start:respWin.stop][:,trials],baseWin,respWin)
+                    hasSpikesPassive,hasRespPassive = findResponsiveUnits(data[exp]['sdfs'][probe]['passive']['change'][inRegion,:,:respWin.stop][:,trials],baseWin,respWin)
                     useUnits = useUnits & hasSpikesPassive
                 units = np.where(useUnits)[0]
                 for n in nUnits:
@@ -337,13 +339,14 @@ for expInd,exp in enumerate(data):
                                 changeScore = np.zeros((nRepeats,len(truncTimes)))
                                 changePredict = []
                                 imageScore = np.zeros_like(changeScore)
-                                imagePredict = []
+                                preImageScore = np.zeros((nRepeats,len(preTruncTimes)))
                                 respLatency = []
-                                changeSDFs,preChangeSDFs = [data[exp]['sdfs'][probe][state][epoch][inRegion,:,respWin].transpose((1,0,2))[trials] for epoch in ('change','preChange')]
+                                changeSDFs,preChangeSDFs = [data[exp]['sdfs'][probe][state][epoch][inRegion,:].transpose((1,0,2))[trials] for epoch in ('change','preChange')]
                                 for i,unitSamp in enumerate(unitSamples):
                                     for j,trunc in enumerate(truncTimes):
                                         # decode image change
-                                        X = np.concatenate([s[:,unitSamp,:trunc].reshape((s.shape[0],-1)) for s in (changeSDFs,preChangeSDFs)])
+                                        truncSlice = slice(respWin.start,respWin.start+trunc)
+                                        X = np.concatenate([s[:,unitSamp,truncSlice].reshape((s.shape[0],-1)) for s in (changeSDFs,preChangeSDFs)])
                                         y = np.zeros(X.shape[0])
                                         y[:int(X.shape[0]/2)] = 1
                                         changeScore[i,j] = cross_val_score(model,X,y,cv=nCrossVal).mean()
@@ -351,15 +354,22 @@ for expInd,exp in enumerate(data):
                                             # get model prediction probability for full length sdfs
                                             changePredict.append(cross_val_predict(model,X,y,cv=nCrossVal,method='predict_proba')[:trials.sum(),1])
                                         # decode image identity
-                                        imgSDFs = [changeSDFs[:,unitSamp,:trunc][changeImage==img] for img in imageNames]
+                                        imgSDFs = [changeSDFs[:,unitSamp,truncSlice][changeImage==img] for img in imageNames]
                                         X = np.concatenate([s.reshape((s.shape[0],-1)) for s in imgSDFs])
                                         y = np.concatenate([np.zeros(s.shape[0])+imgNum for imgNum,s in enumerate(imgSDFs)])
                                         imageScore[i,j] = cross_val_score(model,X,y,cv=nCrossVal).mean()
+                                    # decode pre-change image identity
+                                    for j,trunc in enumerate(preTruncTimes):
+                                        preImgSDFs = [preChangeSDFs[:,unitSamp,trunc:][np.concatenate(([''],changeImage[:-1]))==img] for img in imageNames]
+                                        X = np.concatenate([s.reshape((s.shape[0],-1)) for s in preImgSDFs])
+                                        y = np.concatenate([np.zeros(s.shape[0])+imgNum for imgNum,s in enumerate(preImgSDFs)])
+                                        preImageScore[i,j] = cross_val_score(model,X,y,cv=nCrossVal).mean()
                                     # calculate population response latency for unit sample
-                                    respLatency.append(findLatency(data[exp]['sdfs'][probe][state]['change'][inRegion,:,baseWin.start:respWin.stop][unitSamp][:,trials].mean(axis=(0,1))[None,:],baseWin,respWin)[0])
+                                    respLatency.append(findLatency(changeSDFs.transpose((1,0,2))[unitSamp].mean(axis=(0,1))[None,:],baseWin,respWin)[0])
                                 result[exp][probe][state]['changeScore'].append(changeScore.mean(axis=0))
                                 result[exp][probe][state]['changePredict'].append(np.mean(changePredict,axis=0))
                                 result[exp][probe][state]['imageScore'].append(imageScore.mean(axis=0))
+                                result[exp][probe][state]['preImageScore'].append(preImageScore.mean(axis=0))
                                 result[exp][probe][state]['respLatency'].append(np.nanmean(respLatency))
                             
 
@@ -576,6 +586,40 @@ for i,region in enumerate(regionLabels):
         if i==len(regionLabels)-1 and j==1:
             ax.legend()
 ax.set_xlabel('Time (ms)')
+
+# plot pre-change image scores
+fig = plt.figure(facecolor='w',figsize=(10,10))
+gs = matplotlib.gridspec.GridSpec(len(regionLabels),2)
+for i,region in enumerate(regionLabels):
+    for j,state in enumerate(('active','passive')):
+        ax = plt.subplot(gs[i,j])
+        for exp in result:
+            for probe in result[exp]:
+                if 'region' in result[exp][probe] and result[exp][probe]['region']==region:
+                    for s in result[exp][probe][state]['preImageScore']:
+                        ax.plot(preTruncTimes,s,'k')
+        for side in ('right','top'):
+            ax.spines[side].set_visible(False)
+        ax.tick_params(direction='out',top=False,right=False)
+#        ax.set_xticks([0,50,100,150,200])
+        ax.set_yticks([0,0.25,0.5,0.75,1])
+        ax.set_yticklabels([0,'',0.5,'',1])
+#        ax.set_xlim([0,200])
+        ax.set_ylim([ymin,1])
+        if i<len(regionLabels)-1:
+            ax.set_xticklabels([])
+        if j>0:
+            ax.set_yticklabels([])    
+        if i==0:
+            if j==0:
+                ax.set_title(region+', '+state)
+            else:
+                ax.set_title(state)
+        elif j==0:
+            ax.set_title(region)
+        if i==0 and j==0:
+            ax.set_ylabel('Decoder Accuracy')
+ax.set_xlabel('Time before change (ms)')
 
 # plot visual response, change decoding, and image decoding latencies
 latency = {exp: {region: {state: {} for state in ('active','passive')} for region in regionLabels} for exp in result}
