@@ -170,8 +170,6 @@ respWin = slice(250,500)
 
 exps = data.keys()
 
-exps = ('04042019_408528','04102019_408527','04252019_421323','04302019_422856','05162019_423749')
-
 
 ###### change mod and latency analysis
 exps = [mouseID+'_'+exp[0] for exp in mouseInfo for ind,mouseID in enumerate(exp[1]) if exp[4][ind]]     
@@ -267,6 +265,7 @@ for ax,ylbl in zip(axes,('Baseline (spikes/s)','Mean Resp (spikes/s)','Peak Resp
 
 
 ###### decoding analysis
+exps = ('04042019_408528','04102019_408527','04252019_421323','04302019_422856','05162019_423749')
     
 regionLabels = ('VISp','VISl','VISal','VISrl','VISpm','VISam')
 
@@ -292,7 +291,7 @@ nUnits = [19]
 nRepeats = 3
 nCrossVal = 3
 
-truncInterval = 5
+truncInterval = 10
 lastTrunc = 200
 truncTimes = np.arange(truncInterval,lastTrunc+1,truncInterval)
 
@@ -304,7 +303,7 @@ modelNames = ('randomForrest', 'supportVectorMachine')
 behavStates = ('active','passive')
 result = {exp: {probe: {state: {'changeScore':{},'changePredict':{},'imageScore':{},'preImageScore':{},'respLatency':[]} for state in behavStates} for probe in data[exp]['sdfs']} for exp in data}
 for expInd,exp in enumerate(exps):
-    print('experiment '+str(expInd+1)+' of '+str(len(data)))
+    print('experiment '+str(expInd+1)+' of '+str(len(exps)))
     if 'passive' in behavStates:
         hasPassive = len(data[exp]['sdfs'][data[exp]['sdfs'].keys()[0]]['passive']['change'])>0
         if not hasPassive:
