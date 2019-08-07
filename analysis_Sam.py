@@ -16,20 +16,9 @@ import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib
 matplotlib.rcParams['pdf.fonttype'] = 42
-
-
-baseDir = 'Z:\\'
-localDir = r'C:\Users\svc_ccg\Desktop\Analysis\Probe'
-
-mouseInfo = (
-             ('409096',('03212019',),('ABCD',),'A',(False,)),
-             ('417882',('03262019','03272019'),('ABCEF','ABCF'),'AB',(False,False)),
-             ('408528',('04042019','04052019'),('ABCDEF',)*2,'AB',(True,True)),
-             ('408527',('04102019','04112019'),('BCDEF',)*2,'AB',(True,True)),
-             ('421323',('04252019','04262019'),('ABCDEF',)*2,'AB',(True,True)),
-             ('422856',('04302019',),('ABCDEF',),'A',(True,)),
-             ('423749',('05162019','05172019'),('ABCDEF',)*2,'AB',(True,True)),
-            )
+from sklearn.ensemble import RandomForestClassifier
+from sklearn.svm import SVC
+from sklearn.model_selection import cross_val_score, cross_val_predict
 
 
 def getPopData(objToHDF5=False,popDataToHDF5=True,miceToAnalyze='all',probesToAnalyze='all',imageSetsToAnalyze='all',mustHavePassive=False,sdfParams={}):
@@ -78,7 +67,6 @@ def getPopData(objToHDF5=False,popDataToHDF5=True,miceToAnalyze='all',probesToAn
 
 
 def getSDFs(obj,probes='all',behaviorStates=('active','passive'),epochs=('change','preChange'),preTime=0.25,postTime=0.75,sampInt=0.001,sdfFilt='exp',sdfSigma=0.005,avg=False,psth=False):
-    
     if probes=='all':
         probes = obj.probes_to_analyze
     
@@ -109,8 +97,7 @@ def getSDFs(obj,probes='all',behaviorStates=('active','passive'),epochs=('change
     return sdfs
 
 
-def getUnitRegions(obj,probes='all'):
-    
+def getUnitRegions(obj,probes='all'):    
     if probes=='all':
         probes = obj.probes_to_analyze
     regions = {}
@@ -123,9 +110,13 @@ def getUnitRegions(obj,probes='all'):
     return regions
 
 
+def findResponsiveUnits(sdfs,baseWin,respWin,thresh=10):
+    unitMeanSDFs = np.array([s.mean(axis=0) for s in sdfs]) if len(sdfs.shape)>2 else sdfs.copy()
+    hasSpikes = unitMeanSDFs.mean(axis=1)>0.1
+    unitMeanSDFs -= unitMeanSDFs[:,baseWin].mean(axis=1)[:,None]
+    hasResp = unitMeanSDFs[:,respWin].max(axis=1) > thresh*unitMeanSDFs[:,baseWin].std(axis=1)
+    return hasSpikes,hasResp
 
-
-# change mod and latency analysis
     
 def findLatency(data,baseWin=None,respWin=None,method='rel',thresh=3,minPtsAbove=30):
     latency = []
@@ -157,18 +148,41 @@ def calcChangeMod(preChangeSDFs,changeSDFs,baseWin,respWin):
     return meanMod, semMod, changeLat
 
 
-data = getDataDict(sdfParams={'responses':['all']})
-        
+baseDir = 'Z:\\'
+localDir = r'C:\Users\svc_ccg\Desktop\Analysis\Probe'
+
+mouseInfo = (
+             ('409096',('03212019',),('ABCD',),'A',(False,)),
+             ('417882',('03262019','03272019'),('ABCEF','ABCF'),'AB',(False,False)),
+             ('408528',('04042019','04052019'),('ABCDEF',)*2,'AB',(True,True)),
+             ('408527',('04102019','04112019'),('BCDEF',)*2,'AB',(True,True)),
+             ('421323',('04252019','04262019'),('ABCDEF',)*2,'AB',(True,True)),
+             ('422856',('04302019',),('ABCDEF',),'A',(True,)),
+             ('423749',('05162019','05172019'),('ABCDEF',)*2,'AB',(True,True)),
+            )
+
+data = getPopData()
+
+data = h5py.File(os.path.join(localDir,'popData.hdf5'))
+
 baseWin = slice(0,250)
 respWin = slice(250,500)
 
-pre,change = [[np.array([s for exp in data for probe in data[exp]['sdfs'] for s in data[exp]['sdfs'][probe][state]['all'][epoch]]) for state in ('active','passive')] for epoch in ('preChange','change')]
-hasSpikesActive,hasSpikesPassive = [sdfs.mean(axis=1) > 0.1 for sdfs in change]
-baseRate = [sdfs[:,baseWin].mean(axis=1) for sdfs in pre+change]
-activePre,passivePre,activeChange,passiveChange = [sdfs-sdfs[:,baseWin].mean(axis=1)[:,None] for sdfs in pre+change]
-hasResp = hasSpikesActive & hasSpikesPassive & (activeChange[:,respWin].max(axis=1) > 5*activeChange[:,baseWin].std(axis=1))
+exps = data.keys()
 
-regions = np.array([r for exp in data for probe in data[exp]['regions'] for r in data[exp]['regions'][probe]])    
+exps = ('04042019_408528','04102019_408527','04252019_421323','04302019_422856','05162019_423749')
+
+
+###### change mod and latency analysis
+exps = [mouseID+'_'+exp[0] for exp in mouseInfo for ind,mouseID in enumerate(exp[1]) if exp[4][ind]]     
+
+allPre,allChange = [[np.concatenate([data[exp]['sdfs'][probe][state][epoch][:].mean(axis=1) for exp in exps for probe in data[exp]['sdfs']]) for state in ('active','passive')] for epoch in ('preChange','change')]
+(hasSpikesActive,hasRespActive),(hasSpikesPassive,hasRespPassive) = [findResponsiveUnits(sdfs,baseWin,respWin,thresh=5) for sdfs in allChange]
+baseRate = [sdfs[:,baseWin].mean(axis=1) for sdfs in allPre+allChange]
+activePre,passivePre,activeChange,passiveChange = [sdfs-sdfs[:,baseWin].mean(axis=1)[:,None] for sdfs in allPre+allChange]
+hasResp = hasSpikesActive & hasSpikesPassive & hasRespActive
+
+regions = np.concatenate([data[exp]['regions'][probe][:] for exp in exps for probe in data[exp]['regions']])    
 #regionNames = sorted(list(set(regions)))
 regionNames = (
                ('V1',('VISp',)),
@@ -252,26 +266,9 @@ for ax,ylbl in zip(axes,('Baseline (spikes/s)','Mean Resp (spikes/s)','Peak Resp
 
 
 
-# decoding analysis
-
-from sklearn.ensemble import RandomForestClassifier
-from sklearn.model_selection import cross_val_score, cross_val_predict
-
-
-def findResponsiveUnits(sdfs,baseWin,respWin,thresh=10):
-    unitMeanSDFs = np.array([s.mean(axis=0) for s in sdfs])
-    hasSpikes = unitMeanSDFs.mean(axis=1)>0.1
-    unitMeanSDFs -= unitMeanSDFs[:,baseWin].mean(axis=1)[:,None]
-    hasResp = unitMeanSDFs[:,respWin].max(axis=1) > thresh*unitMeanSDFs[:,baseWin].std(axis=1)
-    return hasSpikes,hasResp
-
-
-data = h5py.File(os.path.join(localDir,'popData.hdf5'))
-
+###### decoding analysis
+    
 regionLabels = ('VISp','VISl','VISal','VISrl','VISpm','VISam')
-
-baseWin = slice(0,250)
-respWin = slice(250,500)
 
 for exp in data:
     print(exp)
@@ -290,10 +287,7 @@ for exp in data:
                 else:
                     n.append(0)
             print(probe,n)
-        
 
-exps = ('04042019_408528','04102019_408527','04252019_421323','04302019_422856','05162019_423749')
-    
 nUnits = [19]
 nRepeats = 3
 nCrossVal = 3
@@ -305,10 +299,11 @@ truncTimes = np.arange(truncInterval,lastTrunc+1,truncInterval)
 preTruncTimes = np.arange(-750,0,50)
 
 assert((len(nUnits)>=1 and len(truncTimes)==1) or (len(nUnits)==1 and len(truncTimes)>=1))
-model = RandomForestClassifier(n_estimators=100)
+models = (RandomForestClassifier(n_estimators=100), SVC(kernel='linear',C=1.0,probability=True))
+modelNames = ('randomForrest', 'supportVectorMachine')
 behavStates = ('active','passive')
-result = {exp: {probe: {state: {'changeScore':[],'changePredict':[],'imageScore':[],'preImageScore':[],'respLatency':[]} for state in behavStates} for probe in data[exp]['sdfs']} for exp in data}
-for expInd,exp in enumerate(data):
+result = {exp: {probe: {state: {'changeScore':{},'changePredict':{},'imageScore':{},'preImageScore':{},'respLatency':[]} for state in behavStates} for probe in data[exp]['sdfs']} for exp in data}
+for expInd,exp in enumerate(exps):
     print('experiment '+str(expInd+1)+' of '+str(len(data)))
     if 'passive' in behavStates:
         hasPassive = len(data[exp]['sdfs'][data[exp]['sdfs'].keys()[0]]['passive']['change'])>0
@@ -336,10 +331,10 @@ for expInd,exp in enumerate(data):
                         unitSamples = [np.random.choice(units,size=n,replace=False) for _ in range(nRepeats)]
                         for state in behavStates:
                             if state=='active' or hasPassive:
-                                changeScore = np.zeros((nRepeats,len(truncTimes)))
-                                changePredict = []
-                                imageScore = np.zeros_like(changeScore)
-                                preImageScore = np.zeros((nRepeats,len(preTruncTimes)))
+                                changeScore = {model: np.zeros((nRepeats,len(truncTimes))) for model in modelNames}
+                                changePredict = {model: [] for model in modelNames}
+                                imageScore = {model: np.zeros((nRepeats,len(truncTimes))) for model in modelNames}
+                                preImageScore = {model: np.zeros((nRepeats,len(preTruncTimes))) for model in modelNames}
                                 respLatency = []
                                 changeSDFs,preChangeSDFs = [data[exp]['sdfs'][probe][state][epoch][inRegion,:].transpose((1,0,2))[trials] for epoch in ('change','preChange')]
                                 for i,unitSamp in enumerate(unitSamples):
@@ -349,27 +344,32 @@ for expInd,exp in enumerate(data):
                                         X = np.concatenate([s[:,unitSamp,truncSlice].reshape((s.shape[0],-1)) for s in (changeSDFs,preChangeSDFs)])
                                         y = np.zeros(X.shape[0])
                                         y[:int(X.shape[0]/2)] = 1
-                                        changeScore[i,j] = cross_val_score(model,X,y,cv=nCrossVal).mean()
+                                        for model,name in zip(models,modelNames):
+                                            changeScore[name][i,j] = cross_val_score(model,X,y,cv=nCrossVal).mean()
                                         if trunc==lastTrunc:
                                             # get model prediction probability for full length sdfs
-                                            changePredict.append(cross_val_predict(model,X,y,cv=nCrossVal,method='predict_proba')[:trials.sum(),1])
+                                            for model,name in zip(models,modelNames):
+                                                changePredict[name].append(cross_val_predict(model,X,y,cv=nCrossVal,method='predict_proba')[:trials.sum(),1])
                                         # decode image identity
                                         imgSDFs = [changeSDFs[:,unitSamp,truncSlice][changeImage==img] for img in imageNames]
                                         X = np.concatenate([s.reshape((s.shape[0],-1)) for s in imgSDFs])
                                         y = np.concatenate([np.zeros(s.shape[0])+imgNum for imgNum,s in enumerate(imgSDFs)])
-                                        imageScore[i,j] = cross_val_score(model,X,y,cv=nCrossVal).mean()
+                                        for model,name in zip(models,modelNames):
+                                            imageScore[name][i,j] = cross_val_score(model,X,y,cv=nCrossVal).mean()
                                     # decode pre-change image identity
                                     for j,trunc in enumerate(preTruncTimes):
                                         preImgSDFs = [preChangeSDFs[:,unitSamp,trunc:][np.concatenate(([''],changeImage[:-1]))==img] for img in imageNames]
                                         X = np.concatenate([s.reshape((s.shape[0],-1)) for s in preImgSDFs])
                                         y = np.concatenate([np.zeros(s.shape[0])+imgNum for imgNum,s in enumerate(preImgSDFs)])
-                                        preImageScore[i,j] = cross_val_score(model,X,y,cv=nCrossVal).mean()
+                                        for model,name in zip(models,modelNames):
+                                            preImageScore[name][i,j] = cross_val_score(model,X,y,cv=nCrossVal).mean()
                                     # calculate population response latency for unit sample
                                     respLatency.append(findLatency(changeSDFs.transpose((1,0,2))[unitSamp].mean(axis=(0,1))[None,:],baseWin,respWin)[0])
-                                result[exp][probe][state]['changeScore'].append(changeScore.mean(axis=0))
-                                result[exp][probe][state]['changePredict'].append(np.mean(changePredict,axis=0))
-                                result[exp][probe][state]['imageScore'].append(imageScore.mean(axis=0))
-                                result[exp][probe][state]['preImageScore'].append(preImageScore.mean(axis=0))
+                                for model in modelNames:
+                                    result[exp][probe][state]['changeScore'][model].append(changeScore[model].mean(axis=0))
+                                    result[exp][probe][state]['changePredict'][model].append(np.mean(changePredict[model],axis=0))
+                                    result[exp][probe][state]['imageScore'].append(imageScore[model].mean(axis=0))
+                                    result[exp][probe][state]['preImageScore'][model].append(preImageScore[model].mean(axis=0))
                                 result[exp][probe][state]['respLatency'].append(np.nanmean(respLatency))
                             
 
@@ -429,40 +429,41 @@ ax.legend()
 
 
 # plot scores for each probe
-for score,ymin in zip(('changeScore','imageScore'),[0.45,0]):
-    fig = plt.figure(facecolor='w',figsize=(10,10))
-    gs = matplotlib.gridspec.GridSpec(len(regionLabels),2)
-    for i,region in enumerate(regionLabels):
-        for j,state in enumerate(('active','passive')):
-            ax = plt.subplot(gs[i,j])
-            for exp in result:
-                for probe in result[exp]:
-                    if 'region' in result[exp][probe] and result[exp][probe]['region']==region:
-                        for s in result[exp][probe][state][score]:
-                            ax.plot(truncTimes,s,'k')
-            for side in ('right','top'):
-                ax.spines[side].set_visible(False)
-            ax.tick_params(direction='out',top=False,right=False)
-            ax.set_xticks([0,50,100,150,200])
-            ax.set_yticks([0,0.25,0.5,0.75,1])
-            ax.set_yticklabels([0,'',0.5,'',1])
-            ax.set_xlim([0,200])
-            ax.set_ylim([ymin,1])
-            if i<len(regionLabels)-1:
-                ax.set_xticklabels([])
-            if j>0:
-                ax.set_yticklabels([])    
-            if i==0:
-                if j==0:
-                    ax.set_title(region+', '+state)
-                else:
-                    ax.set_title(state)
-            elif j==0:
-                ax.set_title(region)
-            if i==0 and j==0:
-                ax.set_ylabel('Decoder Accuracy')
-    ax.set_xlabel('Time (ms)')
-    fig.text(0.5,0.95,score[:score.find('S')],fontsize=14,horizontalalignment='center')
+for model in modelNames:
+    for score,ymin in zip(('changeScore','imageScore'),[0.45,0]):
+        fig = plt.figure(facecolor='w',figsize=(10,10))
+        gs = matplotlib.gridspec.GridSpec(len(regionLabels),2)
+        for i,region in enumerate(regionLabels):
+            for j,state in enumerate(('active','passive')):
+                ax = plt.subplot(gs[i,j])
+                for exp in result:
+                    for probe in result[exp]:
+                        if 'region' in result[exp][probe] and result[exp][probe]['region']==region:
+                            for s in result[exp][probe][state][score][model]:
+                                ax.plot(truncTimes,s,'k')
+                for side in ('right','top'):
+                    ax.spines[side].set_visible(False)
+                ax.tick_params(direction='out',top=False,right=False)
+                ax.set_xticks([0,50,100,150,200])
+                ax.set_yticks([0,0.25,0.5,0.75,1])
+                ax.set_yticklabels([0,'',0.5,'',1])
+                ax.set_xlim([0,200])
+                ax.set_ylim([ymin,1])
+                if i<len(regionLabels)-1:
+                    ax.set_xticklabels([])
+                if j>0:
+                    ax.set_yticklabels([])    
+                if i==0:
+                    if j==0:
+                        ax.set_title(region+', '+state)
+                    else:
+                        ax.set_title(state)
+                elif j==0:
+                    ax.set_title(region)
+                if i==0 and j==0:
+                    ax.set_ylabel('Decoder Accuracy')
+        ax.set_xlabel('Time (ms)')
+        fig.text(0.5,0.95,model+', '+score[:score.find('S')],fontsize=14,horizontalalignment='center')
     
 # plot avg score for each area
 regionColors = matplotlib.cm.jet(np.linspace(0,1,len(regionLabels)))
@@ -482,7 +483,9 @@ for i,(score,ymin) in enumerate(zip(('changeScore','imageScore'),(0.45,0))):
             n = len(regionScore)
             if n>0:
                 m = np.mean(regionScore,axis=0)
+                s = np.std(regionScore,axis=0)/(len(regionScore)**0.5)
                 ax.plot(truncTimes,m,color=clr,label=region+'(n='+str(n)+')')
+                ax.fill_between(truncTimes,m+s,m-s,color=clr,alpha=0.25)
         for side in ('right','top'):
             ax.spines[side].set_visible(False)
         ax.tick_params(direction='out',top=False,right=False)
@@ -520,7 +523,9 @@ for i,region in enumerate(regionLabels):
             n = len(regionScore)
             if n>0:
                 m = np.mean(regionScore,axis=0)
+                s = np.std(regionScore,axis=0)/(len(regionScore)**0.5)
                 ax.plot(truncTimes,m,color=clr,label=score[:score.find('S')])
+                ax.fill_between(truncTimes,m+s,m-s,color=clr,alpha=0.25)
         for side in ('right','top'):
             ax.spines[side].set_visible(False)
         ax.tick_params(direction='out',top=False,right=False)
@@ -563,7 +568,9 @@ for i,region in enumerate(regionLabels):
             n = len(regionScore)
             if n>0:
                 m = np.mean(regionScore,axis=0)
+                s = np.std(regionScore,axis=0)/(len(regionScore)**0.5)
                 ax.plot(truncTimes,m,color=clr,label=state)
+                ax.fill_between(truncTimes,m+s,m-s,color=clr,alpha=0.25)
         for side in ('right','top'):
             ax.spines[side].set_visible(False)
         ax.tick_params(direction='out',top=False,right=False)
@@ -722,11 +729,14 @@ plt.figure(facecolor='w',figsize=(6,4))
 ax = plt.subplot(1,1,1)
 x = np.arange(len(regionLabels))
 for state,clr,grayclr in zip(('active','passive'),'rb',([1,0.5,0.5],[0.5,0.5,1])):
-    for exp in fracSame:
-        y = [fracSame[exp][region][state] for region in regionLabels]
-        plt.plot(x,y,color=grayclr)
-    m = [np.nanmean([fracSame[exp][region][state] for exp in fracSame]) for region in regionLabels]
-    plt.plot(x,m,color=clr,linewidth=3,label=state)
+#    for exp in fracSame:
+#        y = [fracSame[exp][region][state] for region in regionLabels]
+#        ax.plot(x,y,color=grayclr)
+    regionData = [[fracSame[exp][region][state] for exp in fracSame] for region in regionLabels]
+    m = np.array([np.nanmean(d) for d in regionData])
+    s = np.array([np.nanstd(d)/(np.sum(~np.isnan(d))**0.5) for d in regionData])
+    ax.plot(x,m,color=clr,linewidth=2,label=state)
+    ax.fill_between(x,m+s,m-s,color=clr,alpha=0.25)
 for side in ('right','top'):
     ax.spines[side].set_visible(False)
 ax.tick_params(direction='out',top=False,right=False)
