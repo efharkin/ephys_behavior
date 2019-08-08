@@ -299,9 +299,13 @@ preTruncTimes = np.arange(-750,0,50)
 
 assert((len(nUnits)>=1 and len(truncTimes)==1) or (len(nUnits)==1 and len(truncTimes)>=1))
 models = (RandomForestClassifier(n_estimators=100), SVC(kernel='linear',C=1.0,probability=True))
-modelNames = ('randomForrest', 'supportVectorMachine')
+modelNames = ('randomForest', 'supportVector')
 behavStates = ('active','passive')
-result = {exp: {probe: {state: {'changeScore':{},'changePredict':{},'imageScore':{},'preImageScore':{},'respLatency':[]} for state in behavStates} for probe in data[exp]['sdfs']} for exp in data}
+result = {exp: {probe: {state: {'changeScore':{model:[] for model in modelNames},
+                                'changePredict':{model:[] for model in modelNames},
+                                'imageScore':{model:[] for model in modelNames},
+                                'preImageScore':{model:[] for model in modelNames},
+                                'respLatency':[]} for state in behavStates} for probe in data[exp]['sdfs']} for exp in data}
 for expInd,exp in enumerate(exps):
     print('experiment '+str(expInd+1)+' of '+str(len(exps)))
     if 'passive' in behavStates:
@@ -367,7 +371,7 @@ for expInd,exp in enumerate(exps):
                                 for model in modelNames:
                                     result[exp][probe][state]['changeScore'][model].append(changeScore[model].mean(axis=0))
                                     result[exp][probe][state]['changePredict'][model].append(np.mean(changePredict[model],axis=0))
-                                    result[exp][probe][state]['imageScore'].append(imageScore[model].mean(axis=0))
+                                    result[exp][probe][state]['imageScore'][model].append(imageScore[model].mean(axis=0))
                                     result[exp][probe][state]['preImageScore'][model].append(preImageScore[model].mean(axis=0))
                                 result[exp][probe][state]['respLatency'].append(np.nanmean(respLatency))
                             

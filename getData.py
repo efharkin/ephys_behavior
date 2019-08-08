@@ -31,7 +31,7 @@ class behaviorEphys():
             self.dataDir = dataDir
         else:
             self.dataDir = baseDir
-        sync_file = glob.glob(os.path.join(self.dataDir, '*.h5'))
+        sync_file = glob.glob(os.path.join(self.dataDir,'*'+('[0-9]'*18)+'.h5'))
         self.sync_file = sync_file[0] if len(sync_file)>0 else None
         self.syncDataset = sync.Dataset(self.sync_file) if self.sync_file is not None else None
         if probes is None:
@@ -66,11 +66,11 @@ class behaviorEphys():
         self.getRFandFlashStimInfo()
         self.getPassiveStimInfo()
         self.getUnits()
+        self.getVisualResponsiveness()
         self.getCCFPositions()
         
     def getUnits(self):    
         self.units = {str(pid): probeSync.getUnitData(self.dataDir, self.syncDataset, pid, self.PXIDict, self.probeGen) for pid in self.probes_to_analyze}
-        self.getVisualResponsiveness()
     
     def getLFP(self):
         self.lfp = {}
@@ -82,7 +82,7 @@ class behaviorEphys():
     
     def getCCFPositions(self):
         # get unit CCF positions
-        self.probeCCFFile = glob.glob(os.path.join(self.dataDir,'probePosCCF*.xlsx'))
+        self.probeCCFFile = glob.glob(os.path.join(self.dataDir,'probePosCCF_*'+('[0-9]'*8)+'_'+('[0-9]'*6)+'.xlsx'))
         #if len(self.probeCCFFile)>0:
         try:
             probeCCF = pd.read_excel(self.probeCCFFile[0])
