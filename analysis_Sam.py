@@ -161,11 +161,12 @@ mouseInfo = (
              ('422856',('04302019',),('ABCDEF',),'A',(True,)),
              ('423749',('05162019','05172019'),('ABCDEF','ABCDEF'),'AB',(True,True)),
              ('427937',('06062019','06072019'),('ABCDEF','ABCDF'),'AB',(True,True)),
+#             ('423745',('06122019',),('ABCDEF',),'A',(True,)),
              ('429084',('07112019','07122019'),('ABCDEF','ABCDE'),'AB',(True,True)),
             )
 
 # make new experiment hdf5s without updating popData.hdf5
-getPopData(objToHDF5=True,popDataToHDF5=False,miceToAnalyze=('408528','427937','429084'))
+getPopData(objToHDF5=True,popDataToHDF5=False,miceToAnalyze=('429084',))
 
 # make popData.hdf5 from existing experiment hdf5s
 getPopData(objToHDF5=False,popDataToHDF5=True)

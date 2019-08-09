@@ -132,24 +132,9 @@ class behaviorEphys():
         except:
             for pid in self.probes_to_analyze:
                 for u in self.units[pid]:
-                    for key in ('ccf','ccfID','ccfRegion'):
-                        self.units[pid][u][key] = None
-            if os.path.isfile(os.path.join(os.path.dirname(self.dataDir), 'hippocampusChannels.xlsx')):
-                try:
-                    print('assigning hippocampus channels')
-                    hippoFile = os.path.join(os.path.dirname(self.dataDir), 'hippocampusChannels.xlsx')
-                    hippodf = pd.read_excel(hippoFile, sheetname=os.path.basename(self.dataDir))
-                    for pid in self.probes_to_analyze:
-                        hippoendchan = int(hippodf[hippodf.Probe==pid].hipp_end_chan)
-                        cortexendchan = int(hippodf[hippodf.Probe==pid].cortex_end_chan)
-                        for u in self.units[pid]:
-                            if self.units[pid][u]['peakChan']<hippoendchan:
-                                self.units[pid][u]['ccfRegion'] = 'hipp'
-                            elif self.units[pid][u]['peakChan']>cortexendchan:
-                                self.units[pid][u]['ccfRegion'] = 'air'
-                except:
-                    print('could not assign hippocampus channels, sheet name may be wrong')
-                    
+                    for key in ('ccf','ccfID','ccfRegion','inCortex'):
+                        self.units[pid][u][key] = None               
+
                     
     def saveCCFPositionsAsArray(self,appendEntry=True):
         for pid in self.probes_to_analyze:
@@ -166,8 +151,7 @@ class behaviorEphys():
                 r = np.append(r,np.median(r)).astype(float) # add probe entry point
             
             np.save(f,d)
-            np.save(rf, r)
-            
+            np.save(rf, r)      
 
                 
     def getFrameTimes(self):
