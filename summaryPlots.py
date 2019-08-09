@@ -214,7 +214,10 @@ def plot_unit_behavior_summary(obj, pid, uid, multipageObj=None):
         plt.close(fig)
 
 
-def plot_images(obj, axes):
+def plot_images(obj, axes=None):
+    if axes is None:
+        fig, axes = plt.subplots(8)
+        
     for ax,img,imname in zip(axes,obj.imagesDownsampled,obj.imageNames):
         ax.imshow(img,cmap='gray',clim=[0,255])
         ax.set_xticks([])
@@ -223,6 +226,10 @@ def plot_images(obj, axes):
 
 
 def plot_rf(obj, spikes, axes=None, resp_latency=0.025, plot=True, returnMat=False):
+    if axes is None and plot:
+        fig, ax = plt.subplots()
+        axes = [ax]
+    
     #extract trial stim info (xpos, ypos, ori)
     sweep_table = np.array(obj.rfStimParams['sweep_table'])   #table with rfstim parameters, indexed by sweep order to give stim for each trial
     sweep_order = np.array(obj.rfStimParams['sweep_order'])   #index of stimuli for sweep_table for each trial
@@ -278,6 +285,9 @@ def plot_rf(obj, spikes, axes=None, resp_latency=0.025, plot=True, returnMat=Fal
 
 
 def plot_psth_all_flashes(obj, spikes, axes=None, preTime = 0.05, postTime = 0.55, sdfSigma=0.005, returnSDFs=False):
+    if axes is None:
+        fig, axes = plt.subplots(8)
+    
     image_flash_times = obj.frameAppearTimes[np.array(obj.core_data['visual_stimuli']['frame'])]
     image_id = np.array(obj.core_data['visual_stimuli']['image_name'])
     
@@ -318,6 +328,9 @@ def plot_psth_all_flashes(obj, spikes, axes=None, preTime = 0.05, postTime = 0.5
         return sdfs
 
 def plot_psth_omitted_flashes(obj, spikes, axes=None, preTime = 0.05, postTime = 0.55, sdfSigma=0.005):
+    if axes is None:
+        fig, axes = plt.subplots(8)
+    
     image_flash_times = obj.frameAppearTimes[obj.omittedFlashFrames]
     image_id = np.array(obj.omittedFlashImage)
     
@@ -357,6 +370,9 @@ def plot_psth_omitted_flashes(obj, spikes, axes=None, preTime = 0.05, postTime =
     
     
 def plot_psth_hits_vs_misses(obj, spikes, axes=None, preTime=1.55, postTime=4.5, sdfSigma=0.02):
+    if axes is None:
+        fig, axes = plt.subplots(8)
+    
     hitSDFs = []
     missSDFs = []
     for resp,s in zip((obj.hit, obj.miss),(hitSDFs,missSDFs)):
@@ -491,6 +507,9 @@ def plot_spike_template(obj, pid, uid, gs=None):
 
 
 def plot_lick_triggered_fr(obj, spikes, axis=None, min_inter_lick_time = 0.5, preTime=1, postTime=2, plot=True, sdfSigma=0.01, returnSDF=False):
+    if axis is None and plot:
+        fig, axis = plt.subplots()
+    
     frameTimes = obj.frameAppearTimes    
     
     trial_start_frames = np.array(obj.trials['startframe'])
@@ -526,7 +545,10 @@ def plot_lick_triggered_fr(obj, spikes, axis=None, min_inter_lick_time = 0.5, pr
         return hit_psth, bad_psth
     
     
-def plot_run_triggered_fr(obj, spikes, axis, preTime=1, postTime=2):      
+def plot_run_triggered_fr(obj, spikes, axis=None, preTime=1, postTime=2): 
+    if axis is None:
+        fig, axis = plt.subplots()
+        
     if len(obj.behaviorRunStartTimes)>0:
         run_psth, t = analysis_utils.getSDF(spikes,obj.behaviorRunStartTimes-preTime,preTime+postTime)
         axis.plot(t-1,run_psth, 'k')
@@ -534,9 +556,11 @@ def plot_run_triggered_fr(obj, spikes, axis, preTime=1, postTime=2):
         formatFigure(plt.gcf(), axis, xLabel='Time to run (s)', yLabel='Run-Trig. FR (Hz)')
     
 
-def plot_saccade_triggered_fr(obj, spikes, axis, preTime=2, postTime=2, sdfSigma=0.02, latThresh=5, minPtsAboveThresh=50):
+def plot_saccade_triggered_fr(obj, spikes, axis=None, preTime=2, postTime=2, sdfSigma=0.02, latThresh=5, minPtsAboveThresh=50):
     if obj.eyeData is None:
         return    
+    if axis is None:
+        fig, axis = plt.subplots()
     
     latFilt = np.ones(minPtsAboveThresh)
 
