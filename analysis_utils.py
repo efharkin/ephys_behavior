@@ -196,4 +196,32 @@ def calculate_lifetime_sparseness(mean_response_vector):
         ls = np.nan
     
     return ls
+
+
+def formatFigure(fig, ax, title=None, xLabel=None, yLabel=None, xTickLabels=None, yTickLabels=None, blackBackground=False, saveName=None):
+    fig.set_facecolor('w')
+    ax.spines['right'].set_visible(False)
+    ax.spines['top'].set_visible(False)
+    ax.tick_params(direction='out',top=False,right=False)
+    
+    if title is not None:
+        ax.set_title(title)
+    if xLabel is not None:
+        ax.set_xlabel(xLabel)
+    if yLabel is not None:
+        ax.set_ylabel(yLabel)
+        
+    if blackBackground:
+        ax.set_axis_bgcolor('k')
+        ax.tick_params(labelcolor='w', color='w')
+        ax.xaxis.label.set_color('w')
+        ax.yaxis.label.set_color('w')
+        for side in ('left','bottom'):
+            ax.spines[side].set_color('w')
+
+        fig.set_facecolor('k')
+        fig.patch.set_facecolor('k')
+    if saveName is not None:
+        fig.savefig(saveName, facecolor=fig.get_facecolor())
+
     

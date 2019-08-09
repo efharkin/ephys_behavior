@@ -14,7 +14,7 @@ import matplotlib.pyplot as plt
 from matplotlib import patches
 import matplotlib.gridspec as gridspec
 from matplotlib.backends.backend_pdf import PdfPages
-from probeData import formatFigure
+from analysis_utils import formatFigure
 import scipy.stats
 
 
