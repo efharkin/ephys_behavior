@@ -22,7 +22,7 @@ from sklearn.svm import LinearSVC
 from sklearn.model_selection import cross_val_score, cross_val_predict
 
 
-def getPopData(objToHDF5=False,popDataToHDF5=True,appendToPopHDF5=False,miceToAnalyze='all',probesToAnalyze='all',imageSetsToAnalyze='all',mustHavePassive=False,sdfParams={}):
+def getPopData(objToHDF5=False,popDataToHDF5=True,miceToAnalyze='all',probesToAnalyze='all',imageSetsToAnalyze='all',mustHavePassive=False,sdfParams={}):
     if popDataToHDF5:
         popHDF5Path = os.path.join(localDir,'popData.hdf5')
     for mouseID,ephysDates,probeIDs,imageSet,passiveSession in mouseInfo:
@@ -64,7 +64,7 @@ def getPopData(objToHDF5=False,popDataToHDF5=True,appendToPopHDF5=False,miceToAn
                 data[expName]['response'] = resp[trials]
                 # add preChange image identity, time between changes, receptive field info
 
-                fileIO.objToHDF5(obj=None,saveDict=data,filePath=popHDF5Path,append=appendToPopHDF5)
+                fileIO.objToHDF5(obj=None,saveDict=data,filePath=popHDF5Path)
 
 
 def getSDFs(obj,probes='all',behaviorStates=('active','passive'),epochs=('change','preChange'),preTime=0.25,postTime=0.75,sampInt=0.001,sdfFilt='exp',sdfSigma=0.005,avg=False,psth=False):
@@ -167,11 +167,11 @@ mouseInfo = (
 # make new experiment hdf5s without updating popData.hdf5
 getPopData(objToHDF5=True,popDataToHDF5=False,miceToAnalyze=('408528','427937','429084'))
 
-# make new popData.hdf5 from existing experiment hdf5s
-getPopData(objToHDF5=False,popDataToHDF5=True,appendToPopHDF5=False)
+# make popData.hdf5 from existing experiment hdf5s
+getPopData(objToHDF5=False,popDataToHDF5=True)
 
-# add new experiment hdf5s to existing popData.hdf5
-getPopData(objToHDF5=True,popDataToHDF5=True,appendToPopHDF5=True,miceToAnalyze=(''))
+# make new experiment hdf5s and add to existing popData.hdf5
+getPopData(objToHDF5=True,popDataToHDF5=True,miceToAnalyze=(''))
 
 
 data = h5py.File(os.path.join(localDir,'popData.hdf5'))

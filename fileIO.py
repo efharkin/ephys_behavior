@@ -55,8 +55,7 @@ def objToHDF5(obj,filePath=None,fileOut=None,grp=None,saveDict=None,append='Fals
             filePath = saveFile(fileType='*.hdf5')
             if filePath=='':
                 return
-        fileMode = 'a' if append else 'w'
-        fileOut = h5py.File(filePath,fileMode)
+        fileOut = h5py.File(filePath,'a')
         newFile = fileOut
     else:
         newFile = None
