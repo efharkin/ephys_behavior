@@ -286,7 +286,7 @@ def plot_rf(obj, spikes, axes=None, resp_latency=0.025, plot=True, returnMat=Fal
 
 def plot_psth_all_flashes(obj, spikes, axes=None, preTime = 0.05, postTime = 0.55, sdfSigma=0.005, returnSDFs=False):
     if axes is None:
-        fig, axes = plt.subplots(8)
+        fig, axes = plt.subplots(9)
     
     image_flash_times = obj.frameAppearTimes[np.array(obj.core_data['visual_stimuli']['frame'])]
     image_id = np.array(obj.core_data['visual_stimuli']['image_name'])
@@ -329,7 +329,7 @@ def plot_psth_all_flashes(obj, spikes, axes=None, preTime = 0.05, postTime = 0.5
 
 def plot_psth_omitted_flashes(obj, spikes, axes=None, preTime = 0.05, postTime = 0.55, sdfSigma=0.005):
     if axes is None:
-        fig, axes = plt.subplots(8)
+        fig, axes = plt.subplots(9)
     
     image_flash_times = obj.frameAppearTimes[obj.omittedFlashFrames]
     image_id = np.array(obj.omittedFlashImage)
@@ -371,7 +371,7 @@ def plot_psth_omitted_flashes(obj, spikes, axes=None, preTime = 0.05, postTime =
     
 def plot_psth_hits_vs_misses(obj, spikes, axes=None, preTime=1.55, postTime=4.5, sdfSigma=0.02):
     if axes is None:
-        fig, axes = plt.subplots(8)
+        fig, axes = plt.subplots(9)
     
     hitSDFs = []
     missSDFs = []
