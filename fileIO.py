@@ -49,13 +49,14 @@ def saveFile(caption='Save As',rootDir='',fileType=''):
     return str(filePath)
 
 
-def objToHDF5(obj,filePath=None,fileOut=None,grp=None,saveDict=None):
+def objToHDF5(obj,filePath=None,fileOut=None,grp=None,saveDict=None,append='False'):
     if fileOut is None:
         if filePath is None:
             filePath = saveFile(fileType='*.hdf5')
             if filePath=='':
                 return
-        fileOut = h5py.File(filePath,'a')
+        fileMode = 'a' if append else 'w'
+        fileOut = h5py.File(filePath,fileMode)
         newFile = fileOut
     else:
         newFile = None

@@ -21,7 +21,7 @@ from sklearn.svm import SVC
 from sklearn.model_selection import cross_val_score, cross_val_predict
 
 
-def getPopData(objToHDF5=False,popDataToHDF5=True,miceToAnalyze='all',probesToAnalyze='all',imageSetsToAnalyze='all',mustHavePassive=False,sdfParams={}):
+def getPopData(objToHDF5=False,popDataToHDF5=True,appendToPopHDF5=False,miceToAnalyze='all',probesToAnalyze='all',imageSetsToAnalyze='all',mustHavePassive=False,sdfParams={}):
     if popDataToHDF5:
         popHDF5Path = os.path.join(localDir,'popData.hdf5')
     for mouseID,ephysDates,probeIDs,imageSet,passiveSession in mouseInfo:
@@ -63,7 +63,7 @@ def getPopData(objToHDF5=False,popDataToHDF5=True,miceToAnalyze='all',probesToAn
                 data[expName]['response'] = resp[trials]
                 # add preChange image identity, time between changes, receptive field info
 
-                fileIO.objToHDF5(obj=None,saveDict=data,filePath=popHDF5Path)
+                fileIO.objToHDF5(obj=None,saveDict=data,filePath=popHDF5Path,append=appendToPopHDF5)
 
 
 def getSDFs(obj,probes='all',behaviorStates=('active','passive'),epochs=('change','preChange'),preTime=0.25,postTime=0.75,sampInt=0.001,sdfFilt='exp',sdfSigma=0.005,avg=False,psth=False):
@@ -154,14 +154,24 @@ localDir = r'C:\Users\svc_ccg\Desktop\Analysis\Probe'
 mouseInfo = (
              ('409096',('03212019',),('ABCD',),'A',(False,)),
              ('417882',('03262019','03272019'),('ABCEF','ABCF'),'AB',(False,False)),
-             ('408528',('04042019','04052019'),('ABCDEF',)*2,'AB',(True,True)),
-             ('408527',('04102019','04112019'),('BCDEF',)*2,'AB',(True,True)),
-             ('421323',('04252019','04262019'),('ABCDEF',)*2,'AB',(True,True)),
+             ('408528',('04042019','04052019'),('ABCDE','ABCDE'),'AB',(True,True)),
+             ('408527',('04102019','04112019'),('BCDEF','BCDEF'),'AB',(True,True)),
+             ('421323',('04252019','04262019'),('ABCDEF','ABCDEF'),'AB',(True,True)),
              ('422856',('04302019',),('ABCDEF',),'A',(True,)),
              ('423749',('05162019','05172019'),('ABCDEF',)*2,'AB',(True,True)),
+             ('427937',('06062019','06072019'),('ABCDEF','ABCDF'),'AB',(True,True)),
+             ('429084',('07112019','07122019'),('ABCDEF','ABCDE'),'AB',(True,True)),
             )
 
-data = getPopData()
+# make new experiment hdf5s without updating popData.hdf5
+getPopData(objToHDF5=True,popDataToHDF5=False,miceToAnalyze=('408528','427937','429084'))
+
+# make new popData.hdf5 from existing experiment hdf5s
+getPopData(objToHDF5=False,popDataToHDF5=True,appendToPopHDF5=False)
+
+# add new experiment hdf5s to existing popData.hdf5
+getPopData(objToHDF5=True,popDataToHDF5=True,appendToPopHDF5=True,miceToAnalyze=(''))
+
 
 data = h5py.File(os.path.join(localDir,'popData.hdf5'))
 
