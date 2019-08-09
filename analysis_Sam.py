@@ -16,8 +16,9 @@ import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib
 matplotlib.rcParams['pdf.fonttype'] = 42
+import sklearn
 from sklearn.ensemble import RandomForestClassifier
-from sklearn.svm import SVC
+from sklearn.svm import LinearSVC
 from sklearn.model_selection import cross_val_score, cross_val_predict
 
 
@@ -158,7 +159,7 @@ mouseInfo = (
              ('408527',('04102019','04112019'),('BCDEF','BCDEF'),'AB',(True,True)),
              ('421323',('04252019','04262019'),('ABCDEF','ABCDEF'),'AB',(True,True)),
              ('422856',('04302019',),('ABCDEF',),'A',(True,)),
-             ('423749',('05162019','05172019'),('ABCDEF',)*2,'AB',(True,True)),
+             ('423749',('05162019','05172019'),('ABCDEF','ABCDEF'),'AB',(True,True)),
              ('427937',('06062019','06072019'),('ABCDEF','ABCDF'),'AB',(True,True)),
              ('429084',('07112019','07122019'),('ABCDEF','ABCDE'),'AB',(True,True)),
             )
@@ -178,11 +179,15 @@ data = h5py.File(os.path.join(localDir,'popData.hdf5'))
 baseWin = slice(0,250)
 respWin = slice(250,500)
 
-exps = data.keys()
+exps = data.keys() # all experiments
+
+# A or B days that have passive session
+Aexps,Bexps = [[mouseID+'_'+exp[0] for exp in mouseInfo for mouseID,probes,imgSet,hasPassive in zip(exp[1:]) if imgSet==im and hasPassive] for im in 'AB']
+exps = Aexps+Bexps
+
 
 
 ###### change mod and latency analysis
-exps = [mouseID+'_'+exp[0] for exp in mouseInfo for ind,mouseID in enumerate(exp[1]) if exp[4][ind]]     
 
 allPre,allChange = [[np.concatenate([data[exp]['sdfs'][probe][state][epoch][:].mean(axis=1) for exp in exps for probe in data[exp]['sdfs']]) for state in ('active','passive')] for epoch in ('preChange','change')]
 (hasSpikesActive,hasRespActive),(hasSpikesPassive,hasRespPassive) = [findResponsiveUnits(sdfs,baseWin,respWin,thresh=5) for sdfs in allChange]
@@ -275,9 +280,9 @@ for ax,ylbl in zip(axes,('Baseline (spikes/s)','Mean Resp (spikes/s)','Peak Resp
 
 
 ###### decoding analysis
-exps = ('04042019_408528','04102019_408527','04252019_421323','04302019_422856','05162019_423749')
     
 regionLabels = ('VISp','VISl','VISal','VISrl','VISpm','VISam')
+regionColors = matplotlib.cm.jet(np.linspace(0,1,len(regionLabels)))
 
 for exp in data:
     print(exp)
@@ -308,7 +313,7 @@ truncTimes = np.arange(truncInterval,lastTrunc+1,truncInterval)
 preTruncTimes = np.arange(-750,0,50)
 
 assert((len(nUnits)>=1 and len(truncTimes)==1) or (len(nUnits)==1 and len(truncTimes)>=1))
-models = (RandomForestClassifier(n_estimators=100), SVC(kernel='linear',C=1.0,probability=True))
+models = (RandomForestClassifier(n_estimators=100), LinearSVC(C=1.0)) # SVC(kernel='linear',C=1.0,probability=True)
 modelNames = ('randomForest', 'supportVector')
 behavStates = ('active','passive')
 result = {exp: {probe: {state: {'changeScore':{model:[] for model in modelNames},
@@ -362,7 +367,8 @@ for expInd,exp in enumerate(exps):
                                         if trunc==lastTrunc:
                                             # get model prediction probability for full length sdfs
                                             for model,name in zip(models,modelNames):
-                                                changePredict[name].append(cross_val_predict(model,X,y,cv=nCrossVal,method='predict_proba')[:trials.sum(),1])
+                                                if not isinstance(model,sklearn.svm.classes.LinearSVC):
+                                                    changePredict[name].append(cross_val_predict(model,X,y,cv=nCrossVal,method='predict_proba')[:trials.sum(),1])
                                         # decode image identity
                                         imgSDFs = [changeSDFs[:,unitSamp,truncSlice][changeImage==img] for img in imageNames]
                                         X = np.concatenate([s.reshape((s.shape[0],-1)) for s in imgSDFs])
@@ -387,29 +393,90 @@ for expInd,exp in enumerate(exps):
                             
 
 # plot scores vs number of units
-plt.figure(facecolor='w',figsize=(10,10))
+for model in modelNames:
+    fig = plt.figure(facecolor='w',figsize=(10,10))
+    fig.text(0.5,0.95,model,fontsize=14,horizontalalignment='center')
+    gs = matplotlib.gridspec.GridSpec(len(regionLabels),2)
+    allScores = {score: [] for score in ('changeScore','imageScore')}
+    for i,region in enumerate(regionLabels):
+        for j,(score,ymin) in enumerate(zip(('changeScore','imageScore'),(0.45,0))):
+            ax = plt.subplot(gs[i,j])
+            expScores = []
+            for exp in result:
+                for probe in result[exp]:
+                    if 'region' in result[exp][probe] and result[exp][probe]['region']==region:
+                        scr = [s[0] for s in result[exp][probe]['active'][score][model]]
+                        scr += [np.nan]*(len(nUnits)-len(scr))
+                        expScores.append(scr)
+                        allScores[score].append(scr)
+                        ax.plot(nUnits,scr,'k')
+            ax.plot(nUnits,np.nanmean(expScores,axis=0),'r',linewidth=2)
+            for side in ('right','top'):
+                    ax.spines[side].set_visible(False)
+            ax.tick_params(direction='out',top=False,right=False)
+            ax.set_xticks(np.arange(0,100,10))
+            ax.set_yticks([0,0.25,0.5,0.75,1])
+            ax.set_yticklabels([0,'',0.5,'',1])
+            ax.set_xlim([0,max(nUnits)+5])
+            ax.set_ylim([ymin,1])
+            if i<len(regionLabels)-1:
+                ax.set_xticklabels([])  
+            if i==0:
+                if j==0:
+                    ax.set_title(region+', '+score[:score.find('S')])
+                else:
+                    ax.set_title(score[:score.find('S')])
+            elif j==0:
+                ax.set_title(region)
+            if i==0 and j==0:
+                ax.set_ylabel('Decoder Accuracy')
+    ax.set_xlabel('Number of Units')
+    
+    fig = plt.figure(facecolor='w')
+    fig.text(0.5,0.95,model,fontsize=14,horizontalalignment='center')
+    ax = plt.subplot(1,1,1)
+    for score,clr in zip(('changeScore','imageScore'),('k','0.5')):
+        ax.plot(nUnits,np.nanmean(allScores[score],axis=0),color=clr,label=score[:score.find('S')])
+    for side in ('right','top'):
+        ax.spines[side].set_visible(False)
+    ax.tick_params(direction='out',top=False,right=False)
+    ax.set_xticks(np.arange(0,100,10))
+    ax.set_yticks([0,0.25,0.5,0.75,1])
+    ax.set_yticklabels([0,'',0.5,'',1])
+    ax.set_xlim([0,max(nUnits)+5])
+    ax.set_ylim([0,1])
+    ax.set_xlabel('Number of Units')
+    ax.set_ylabel('Decoder Accuracy')
+    ax.legend()
+    
+    
+# compare models
+fig = plt.figure(facecolor='w',figsize=(10,10))
 gs = matplotlib.gridspec.GridSpec(len(regionLabels),2)
-allScores = {score: [] for score in ('changeScore','imageScore')}
 for i,region in enumerate(regionLabels):
     for j,(score,ymin) in enumerate(zip(('changeScore','imageScore'),(0.45,0))):
         ax = plt.subplot(gs[i,j])
-        expScores = []
-        for exp in result:
-            for probe in result[exp]:
-                if 'region' in result[exp][probe] and result[exp][probe]['region']==region:
-                    scr = [s[0] for s in result[exp][probe]['active'][score]]
-                    scr += [np.nan]*(len(nUnits)-len(scr))
-                    expScores.append(scr)
-                    allScores[score].append(scr)
-                    ax.plot(nUnits,scr,'k')
-        ax.plot(nUnits,np.nanmean(expScores,axis=0),'r',linewidth=2)
+        for model,clr in zip(modelNames,'kg'):
+            regionScore = []
+            for exp in result:
+                for probe in result[exp]:
+                    if 'region' in result[exp][probe] and result[exp][probe]['region']==region:
+                        s = result[exp][probe]['active'][score][model]
+                        if len(s)>0:
+                            regionScore.append(s[0])
+            n = len(regionScore)
+            if n>0:
+                m = np.mean(regionScore,axis=0)
+                s = np.std(regionScore,axis=0)/(len(regionScore)**0.5)
+                ax.plot(truncTimes,m,color=clr,label=model)
+                ax.fill_between(truncTimes,m+s,m-s,color=clr,alpha=0.25)
         for side in ('right','top'):
-                ax.spines[side].set_visible(False)
+            ax.spines[side].set_visible(False)
         ax.tick_params(direction='out',top=False,right=False)
-        ax.set_xticks(np.arange(0,100,10))
+        ax.set_xticks([0,50,100,150,200])
         ax.set_yticks([0,0.25,0.5,0.75,1])
         ax.set_yticklabels([0,'',0.5,'',1])
-        ax.set_xlim([0,max(nUnits)+5])
+        ax.set_xlim([0,200])
         ax.set_ylim([ymin,1])
         if i<len(regionLabels)-1:
             ax.set_xticklabels([])  
@@ -422,29 +489,16 @@ for i,region in enumerate(regionLabels):
             ax.set_title(region)
         if i==0 and j==0:
             ax.set_ylabel('Decoder Accuracy')
-ax.set_xlabel('Number of Units')
-
-plt.figure(facecolor='w')
-ax = plt.subplot(1,1,1)
-for score,clr in zip(('changeScore','imageScore'),('k','0.5')):
-    ax.plot(nUnits,np.nanmean(allScores[score],axis=0),color=clr,label=score[:score.find('S')])
-for side in ('right','top'):
-    ax.spines[side].set_visible(False)
-ax.tick_params(direction='out',top=False,right=False)
-ax.set_xticks(np.arange(0,100,10))
-ax.set_yticks([0,0.25,0.5,0.75,1])
-ax.set_yticklabels([0,'',0.5,'',1])
-ax.set_xlim([0,max(nUnits)+5])
-ax.set_ylim([0,1])
-ax.set_xlabel('Number of Units')
-ax.set_ylabel('Decoder Accuracy')
-ax.legend()
+        if i==len(regionLabels)-1 and j==1:
+            ax.legend()
+ax.set_xlabel('Time (ms)')
 
 
 # plot scores for each probe
 for model in modelNames:
     for score,ymin in zip(('changeScore','imageScore'),[0.45,0]):
         fig = plt.figure(facecolor='w',figsize=(10,10))
+        fig.text(0.5,0.95,model+', '+score[:score.find('S')],fontsize=14,horizontalalignment='center')
         gs = matplotlib.gridspec.GridSpec(len(regionLabels),2)
         for i,region in enumerate(regionLabels):
             for j,state in enumerate(('active','passive')):
@@ -476,287 +530,298 @@ for model in modelNames:
                 if i==0 and j==0:
                     ax.set_ylabel('Decoder Accuracy')
         ax.set_xlabel('Time (ms)')
-        fig.text(0.5,0.95,model+', '+score[:score.find('S')],fontsize=14,horizontalalignment='center')
     
 # plot avg score for each area
-regionColors = matplotlib.cm.jet(np.linspace(0,1,len(regionLabels)))
-plt.figure(facecolor='w',figsize=(10,8))
-gs = matplotlib.gridspec.GridSpec(2,2)
-for i,(score,ymin) in enumerate(zip(('changeScore','imageScore'),(0.45,0))):
-    for j,state in enumerate(('active','passive')):
-        ax = plt.subplot(gs[i,j])
-        for region,clr in zip(regionLabels,regionColors):
-            regionScore = []
-            for exp in result:
-                for probe in result[exp]:
-                    if 'region' in result[exp][probe] and result[exp][probe]['region']==region:
-                        s = result[exp][probe][state][score]
-                        if len(s)>0:
-                            regionScore.append(s[0])
-            n = len(regionScore)
-            if n>0:
-                m = np.mean(regionScore,axis=0)
-                s = np.std(regionScore,axis=0)/(len(regionScore)**0.5)
-                ax.plot(truncTimes,m,color=clr,label=region+'(n='+str(n)+')')
-                ax.fill_between(truncTimes,m+s,m-s,color=clr,alpha=0.25)
-        for side in ('right','top'):
-            ax.spines[side].set_visible(False)
-        ax.tick_params(direction='out',top=False,right=False)
-        ax.set_xticks([0,50,100,150,200])
-        ax.set_yticks([0,0.25,0.5,0.75,1])
-        ax.set_yticklabels([0,'',0.5,'',1])
-        ax.set_xlim([0,200])
-        ax.set_ylim([ymin,1])
-        if i==0:
-            ax.set_xticklabels([])
-            ax.set_title(state)
-        else:
-            ax.set_xlabel('Time (ms)')
-        if j==0:
-            ax.set_ylabel('Decoder Accuracy ('+score[:score.find('S')]+')')
-        else:
-            ax.set_yticklabels([])
-        if i==1 and j==1:
-            ax.legend()
+for model in modelNames:
+    fig = plt.figure(facecolor='w',figsize=(10,8))
+    fig.text(0.5,0.95,model,fontsize=14,horizontalalignment='center')
+    gs = matplotlib.gridspec.GridSpec(2,2)
+    for i,(score,ymin) in enumerate(zip(('changeScore','imageScore'),(0.45,0))):
+        for j,state in enumerate(('active','passive')):
+            ax = plt.subplot(gs[i,j])
+            for region,clr in zip(regionLabels,regionColors):
+                regionScore = []
+                for exp in result:
+                    for probe in result[exp]:
+                        if 'region' in result[exp][probe] and result[exp][probe]['region']==region:
+                            s = result[exp][probe][state][score][model]
+                            if len(s)>0:
+                                regionScore.append(s[0])
+                n = len(regionScore)
+                if n>0:
+                    m = np.mean(regionScore,axis=0)
+                    s = np.std(regionScore,axis=0)/(len(regionScore)**0.5)
+                    ax.plot(truncTimes,m,color=clr,label=region+'(n='+str(n)+')')
+                    ax.fill_between(truncTimes,m+s,m-s,color=clr,alpha=0.25)
+            for side in ('right','top'):
+                ax.spines[side].set_visible(False)
+            ax.tick_params(direction='out',top=False,right=False)
+            ax.set_xticks([0,50,100,150,200])
+            ax.set_yticks([0,0.25,0.5,0.75,1])
+            ax.set_yticklabels([0,'',0.5,'',1])
+            ax.set_xlim([0,200])
+            ax.set_ylim([ymin,1])
+            if i==0:
+                ax.set_xticklabels([])
+                ax.set_title(state)
+            else:
+                ax.set_xlabel('Time (ms)')
+            if j==0:
+                ax.set_ylabel('Decoder Accuracy ('+score[:score.find('S')]+')')
+            else:
+                ax.set_yticklabels([])
+            if i==1 and j==1:
+                ax.legend()
 
 # compare avg change and image scores for each area
-plt.figure(facecolor='w',figsize=(10,10))
-gs = matplotlib.gridspec.GridSpec(len(regionLabels),2)
-for i,region in enumerate(regionLabels):
-    for j,state in enumerate(('active','passive')):
-        ax = plt.subplot(gs[i,j])
-        for score,clr in zip(('changeScore','imageScore'),('k','0.5')):
-            regionScore = []
-            for exp in result:
-                for probe in result[exp]:
-                    if 'region' in result[exp][probe] and result[exp][probe]['region']==region:
-                        s = result[exp][probe][state][score]
-                        if len(s)>0:
-                            regionScore.append(s[0])
-            n = len(regionScore)
-            if n>0:
-                m = np.mean(regionScore,axis=0)
-                s = np.std(regionScore,axis=0)/(len(regionScore)**0.5)
-                ax.plot(truncTimes,m,color=clr,label=score[:score.find('S')])
-                ax.fill_between(truncTimes,m+s,m-s,color=clr,alpha=0.25)
-        for side in ('right','top'):
-            ax.spines[side].set_visible(False)
-        ax.tick_params(direction='out',top=False,right=False)
-        ax.set_xticks([0,50,100,150,200])
-        ax.set_yticks([0,0.25,0.5,0.75,1])
-        ax.set_yticklabels([0,'',0.5,'',1])
-        ax.set_xlim([0,200])
-        ax.set_ylim([0,1])
-        if i<len(regionLabels)-1:
-            ax.set_xticklabels([])
-        if j>0:
-            ax.set_yticklabels([])    
-        if i==0:
-            if j==0:
-                ax.set_title(region+', '+state)
-            else:
-                ax.set_title(state)
-        elif j==0:
-            ax.set_title(region)
-        if i==0 and j==0:
-            ax.set_ylabel('Decoder Accuracy')
-        if i==len(regionLabels)-1 and j==1:
-            ax.legend()
-ax.set_xlabel('Time (ms)')
+for model in modelNames:
+    fig = plt.figure(facecolor='w',figsize=(10,10))
+    fig.text(0.5,0.95,model,fontsize=14,horizontalalignment='center')
+    gs = matplotlib.gridspec.GridSpec(len(regionLabels),2)
+    for i,region in enumerate(regionLabels):
+        for j,state in enumerate(('active','passive')):
+            ax = plt.subplot(gs[i,j])
+            for score,clr in zip(('changeScore','imageScore'),('k','0.5')):
+                regionScore = []
+                for exp in result:
+                    for probe in result[exp]:
+                        if 'region' in result[exp][probe] and result[exp][probe]['region']==region:
+                            s = result[exp][probe][state][score][model]
+                            if len(s)>0:
+                                regionScore.append(s[0])
+                n = len(regionScore)
+                if n>0:
+                    m = np.mean(regionScore,axis=0)
+                    s = np.std(regionScore,axis=0)/(len(regionScore)**0.5)
+                    ax.plot(truncTimes,m,color=clr,label=score[:score.find('S')])
+                    ax.fill_between(truncTimes,m+s,m-s,color=clr,alpha=0.25)
+            for side in ('right','top'):
+                ax.spines[side].set_visible(False)
+            ax.tick_params(direction='out',top=False,right=False)
+            ax.set_xticks([0,50,100,150,200])
+            ax.set_yticks([0,0.25,0.5,0.75,1])
+            ax.set_yticklabels([0,'',0.5,'',1])
+            ax.set_xlim([0,200])
+            ax.set_ylim([0,1])
+            if i<len(regionLabels)-1:
+                ax.set_xticklabels([])
+            if j>0:
+                ax.set_yticklabels([])    
+            if i==0:
+                if j==0:
+                    ax.set_title(region+', '+state)
+                else:
+                    ax.set_title(state)
+            elif j==0:
+                ax.set_title(region)
+            if i==0 and j==0:
+                ax.set_ylabel('Decoder Accuracy')
+            if i==len(regionLabels)-1 and j==1:
+                ax.legend()
+    ax.set_xlabel('Time (ms)')
 
 # plot active vs passive for each area and score
-plt.figure(facecolor='w',figsize=(10,10))
-gs = matplotlib.gridspec.GridSpec(len(regionLabels),2)
-for i,region in enumerate(regionLabels):
-    for j,(score,ymin) in enumerate(zip(('changeScore','imageScore'),(0.45,0))):
-        ax = plt.subplot(gs[i,j])
-        for state,clr in zip(('active','passive'),'rb'):
-            regionScore = []
+for model in modelNames:
+    fig = plt.figure(facecolor='w',figsize=(10,10))
+    fig.text(0.5,0.95,model,fontsize=14,horizontalalignment='center')
+    gs = matplotlib.gridspec.GridSpec(len(regionLabels),2)
+    for i,region in enumerate(regionLabels):
+        for j,(score,ymin) in enumerate(zip(('changeScore','imageScore'),(0.45,0))):
+            ax = plt.subplot(gs[i,j])
+            for state,clr in zip(('active','passive'),'rb'):
+                regionScore = []
+                for exp in result:
+                    for probe in result[exp]:
+                        if 'region' in result[exp][probe] and result[exp][probe]['region']==region:
+                            s = result[exp][probe][state][score][model]
+                            if len(s)>0:
+                                regionScore.append(s[0])
+                n = len(regionScore)
+                if n>0:
+                    m = np.mean(regionScore,axis=0)
+                    s = np.std(regionScore,axis=0)/(len(regionScore)**0.5)
+                    ax.plot(truncTimes,m,color=clr,label=state)
+                    ax.fill_between(truncTimes,m+s,m-s,color=clr,alpha=0.25)
+            for side in ('right','top'):
+                ax.spines[side].set_visible(False)
+            ax.tick_params(direction='out',top=False,right=False)
+            ax.set_xticks([0,50,100,150,200])
+            ax.set_yticks([0,0.25,0.5,0.75,1])
+            ax.set_yticklabels([0,'',0.5,'',1])
+            ax.set_xlim([0,200])
+            ax.set_ylim([ymin,1])
+            if i<len(regionLabels)-1:
+                ax.set_xticklabels([])  
+            if i==0:
+                if j==0:
+                    ax.set_title(region+', '+score[:score.find('S')])
+                else:
+                    ax.set_title(score[:score.find('S')])
+            elif j==0:
+                ax.set_title(region)
+            if i==0 and j==0:
+                ax.set_ylabel('Decoder Accuracy')
+            if i==len(regionLabels)-1 and j==1:
+                ax.legend()
+    ax.set_xlabel('Time (ms)')
+
+# plot pre-change image 
+for model in modelNames:
+    fig = plt.figure(facecolor='w',figsize=(10,10))
+    fig.text(0.5,0.95,model,fontsize=14,horizontalalignment='center')
+    gs = matplotlib.gridspec.GridSpec(len(regionLabels),2)
+    for i,region in enumerate(regionLabels):
+        for j,state in enumerate(('active','passive')):
+            ax = plt.subplot(gs[i,j])
             for exp in result:
                 for probe in result[exp]:
                     if 'region' in result[exp][probe] and result[exp][probe]['region']==region:
-                        s = result[exp][probe][state][score]
-                        if len(s)>0:
-                            regionScore.append(s[0])
-            n = len(regionScore)
-            if n>0:
-                m = np.mean(regionScore,axis=0)
-                s = np.std(regionScore,axis=0)/(len(regionScore)**0.5)
-                ax.plot(truncTimes,m,color=clr,label=state)
-                ax.fill_between(truncTimes,m+s,m-s,color=clr,alpha=0.25)
-        for side in ('right','top'):
-            ax.spines[side].set_visible(False)
-        ax.tick_params(direction='out',top=False,right=False)
-        ax.set_xticks([0,50,100,150,200])
-        ax.set_yticks([0,0.25,0.5,0.75,1])
-        ax.set_yticklabels([0,'',0.5,'',1])
-        ax.set_xlim([0,200])
-        ax.set_ylim([ymin,1])
-        if i<len(regionLabels)-1:
-            ax.set_xticklabels([])  
-        if i==0:
-            if j==0:
-                ax.set_title(region+', '+score[:score.find('S')])
-            else:
-                ax.set_title(score[:score.find('S')])
-        elif j==0:
-            ax.set_title(region)
-        if i==0 and j==0:
-            ax.set_ylabel('Decoder Accuracy')
-        if i==len(regionLabels)-1 and j==1:
-            ax.legend()
-ax.set_xlabel('Time (ms)')
-
-# plot pre-change image scores
-fig = plt.figure(facecolor='w',figsize=(10,10))
-gs = matplotlib.gridspec.GridSpec(len(regionLabels),2)
-for i,region in enumerate(regionLabels):
-    for j,state in enumerate(('active','passive')):
-        ax = plt.subplot(gs[i,j])
-        for exp in result:
-            for probe in result[exp]:
-                if 'region' in result[exp][probe] and result[exp][probe]['region']==region:
-                    for s in result[exp][probe][state]['preImageScore']:
-                        ax.plot(preTruncTimes,s,'k')
-        for side in ('right','top'):
-            ax.spines[side].set_visible(False)
-        ax.tick_params(direction='out',top=False,right=False)
-#        ax.set_xticks([0,50,100,150,200])
-        ax.set_yticks([0,0.25,0.5,0.75,1])
-        ax.set_yticklabels([0,'',0.5,'',1])
-#        ax.set_xlim([0,200])
-        ax.set_ylim([ymin,1])
-        if i<len(regionLabels)-1:
-            ax.set_xticklabels([])
-        if j>0:
-            ax.set_yticklabels([])    
-        if i==0:
-            if j==0:
-                ax.set_title(region+', '+state)
-            else:
-                ax.set_title(state)
-        elif j==0:
-            ax.set_title(region)
-        if i==0 and j==0:
-            ax.set_ylabel('Decoder Accuracy')
-ax.set_xlabel('Time before change (ms)')
+                        for s in result[exp][probe][state]['preImageScore'][model]:
+                            ax.plot(preTruncTimes,s,'k')
+            for side in ('right','top'):
+                ax.spines[side].set_visible(False)
+            ax.tick_params(direction='out',top=False,right=False)
+#            ax.set_xticks([0,50,100,150,200])
+            ax.set_yticks([0,0.25,0.5,0.75,1])
+            ax.set_yticklabels([0,'',0.5,'',1])
+#            ax.set_xlim([0,200])
+            ax.set_ylim([ymin,1])
+            if i<len(regionLabels)-1:
+                ax.set_xticklabels([])
+            if j>0:
+                ax.set_yticklabels([])    
+            if i==0:
+                if j==0:
+                    ax.set_title(region+', '+state)
+                else:
+                    ax.set_title(state)
+            elif j==0:
+                ax.set_title(region)
+            if i==0 and j==0:
+                ax.set_ylabel('Decoder Accuracy')
+    ax.set_xlabel('Time before change (ms)')
 
 # plot visual response, change decoding, and image decoding latencies
-latency = {exp: {region: {state: {} for state in ('active','passive')} for region in regionLabels} for exp in result}
-for exp in result:
-    for probe in result[exp]:
-        for region in regionLabels:
-            if 'region' in result[exp][probe] and result[exp][probe]['region']==region:
-                for state in ('active','passive'):
-                    s = result[exp][probe][state]['respLatency']
-                    if len(s)>0:
-                        latency[exp][region][state]['resp'] = s[0]
-                    for score,decodeThresh in zip(('changeScore','imageScore'),(0.625,0.25)):
-                        s = result[exp][probe][state][score]
-                        if len(s)>0:
-                            intpScore = np.interp(np.arange(truncTimes[0],truncTimes[-1]+1),truncTimes,s[0])
-                            latency[exp][region][state][score[:score.find('S')]] = findLatency(intpScore,method='abs',thresh=decodeThresh)[0]
-
 latencyLabels = {'resp':'Visual Response Latency','change':'Change Decoding Latency','image':'Image Decoding Latency'}
 
-plt.figure(facecolor='w',figsize=(10,10))
-gs = matplotlib.gridspec.GridSpec(3,2)
-axes = []
-latMin = 1000
-latMax = 0
-for i,(xkey,ykey) in enumerate((('resp','change'),('resp','image'),('change','image'))):
-    for j,state in enumerate(('active','passive')):
-        ax = plt.subplot(gs[i,j])
-        axes.append(ax)
-        ax.plot([0,1000],[0,1000],'--',color='0.5')
-        for region,clr in zip(regionLabels,regionColors):
-            x,y = [[latency[exp][region][state][key] for exp in latency if key in latency[exp][region][state]] for key in (xkey,ykey)]
-            latMin = min(latMin,min(x),min(y))
-            latMax = max(latMax,max(x),max(y))
-#            ax.plot(x,y,'o',mec=clr,mfc='none')
-            mx,my = [np.mean(d) for d in (x,y)]
-            sx,sy = [np.std(d)/(len(d)**0.5) for d in (x,y)]
-            ax.plot(mx,my,'o',mec=clr,mfc=clr)
-            ax.plot([mx,mx],[my-sy,my+sy],color=clr)
-            ax.plot([mx-sx,mx+sx],[my,my],color=clr)
-        for side in ('right','top'):
-            ax.spines[side].set_visible(False)
-        ax.tick_params(direction='out',top=False,right=False)
-        ax.set_xlabel(latencyLabels[xkey])
-        ax.set_ylabel(latencyLabels[ykey])
-        if i==0:
-            ax.set_title(state)
-alim = [latMin-5,latMax+5]
-for ax in axes:
-    ax.set_xlim(alim)
-    ax.set_ylim(alim)
-    ax.set_aspect('equal')
-plt.tight_layout()
-
-plt.figure(facecolor='w',figsize=(10,10))
-gs = matplotlib.gridspec.GridSpec(3,2)
-for i,key in enumerate(('resp','image','change')):
-    for j,state in enumerate(('active','passive')):
-        ax = plt.subplot(gs[i,j])
-        d = np.full((len(latency),len(regionLabels)),np.nan)
-        for expInd,exp in enumerate(latency):
-            z = [(r,latency[exp][region][state][key]) for r,region in enumerate(regionLabels) if key in latency[exp][region][state]]
-            if len(z)>0:
-                x,y = zip(*z)
-                ax.plot(x,y,'k')
-                d[expInd,list(x)] = y
-        plt.plot(np.nanmean(d,axis=0),'r',linewidth=2)
-        for side in ('right','top'):
-            ax.spines[side].set_visible(False)
-        ax.tick_params(direction='out',top=False,right=False)
+for model in modelNames:
+    latency = {exp: {region: {state: {} for state in ('active','passive')} for region in regionLabels} for exp in result}
+    for exp in result:
+        for probe in result[exp]:
+            for region in regionLabels:
+                if 'region' in result[exp][probe] and result[exp][probe]['region']==region:
+                    for state in ('active','passive'):
+                        s = result[exp][probe][state]['respLatency']
+                        if len(s)>0:
+                            latency[exp][region][state]['resp'] = s[0]
+                        for score,decodeThresh in zip(('changeScore','imageScore'),(0.625,0.25)):
+                            s = result[exp][probe][state][score][model]
+                            if len(s)>0:
+                                intpScore = np.interp(np.arange(truncTimes[0],truncTimes[-1]+1),truncTimes,s[0])
+                                latency[exp][region][state][score[:score.find('S')]] = findLatency(intpScore,method='abs',thresh=decodeThresh)[0]
+    
+    fig = plt.figure(facecolor='w',figsize=(10,10))
+    fig.text(0.5,0.95,model,fontsize=14,horizontalalignment='center')
+    gs = matplotlib.gridspec.GridSpec(3,2)
+    axes = []
+    latMin = 1000
+    latMax = 0
+    for i,(xkey,ykey) in enumerate((('resp','change'),('resp','image'),('change','image'))):
+        for j,state in enumerate(('active','passive')):
+            ax = plt.subplot(gs[i,j])
+            axes.append(ax)
+            ax.plot([0,1000],[0,1000],'--',color='0.5')
+            for region,clr in zip(regionLabels,regionColors):
+                x,y = [[latency[exp][region][state][key] for exp in latency if key in latency[exp][region][state]] for key in (xkey,ykey)]
+                latMin = min(latMin,min(x),min(y))
+                latMax = max(latMax,max(x),max(y))
+#                ax.plot(x,y,'o',mec=clr,mfc='none')
+                mx,my = [np.mean(d) for d in (x,y)]
+                sx,sy = [np.std(d)/(len(d)**0.5) for d in (x,y)]
+                ax.plot(mx,my,'o',mec=clr,mfc=clr)
+                ax.plot([mx,mx],[my-sy,my+sy],color=clr)
+                ax.plot([mx-sx,mx+sx],[my,my],color=clr)
+            for side in ('right','top'):
+                ax.spines[side].set_visible(False)
+            ax.tick_params(direction='out',top=False,right=False)
+            ax.set_xlabel(latencyLabels[xkey])
+            ax.set_ylabel(latencyLabels[ykey])
+            if i==0:
+                ax.set_title(state)
+    alim = [latMin-5,latMax+5]
+    for ax in axes:
+        ax.set_xlim(alim)
         ax.set_ylim(alim)
-        ax.set_xticks(np.arange(len(regionLabels)))
-        if i==len(latencyLabels)-1:
-            ax.set_xticklabels(regionLabels)
-        else:
-            ax.set_xticklabels([])
-        ax.set_ylabel(latencyLabels[key])
-        if i==0:
-            ax.set_title(state)
+        ax.set_aspect('equal')
+    plt.tight_layout()
+    
+    fig = plt.figure(facecolor='w',figsize=(10,10))
+    fig.text(0.5,0.95,model,fontsize=14,horizontalalignment='center')
+    gs = matplotlib.gridspec.GridSpec(3,2)
+    for i,key in enumerate(('resp','image','change')):
+        for j,state in enumerate(('active','passive')):
+            ax = plt.subplot(gs[i,j])
+            d = np.full((len(latency),len(regionLabels)),np.nan)
+            for expInd,exp in enumerate(latency):
+                z = [(r,latency[exp][region][state][key]) for r,region in enumerate(regionLabels) if key in latency[exp][region][state]]
+                if len(z)>0:
+                    x,y = zip(*z)
+                    ax.plot(x,y,'k')
+                    d[expInd,list(x)] = y
+            plt.plot(np.nanmean(d,axis=0),'r',linewidth=2)
+            for side in ('right','top'):
+                ax.spines[side].set_visible(False)
+            ax.tick_params(direction='out',top=False,right=False)
+            ax.set_ylim(alim)
+            ax.set_xticks(np.arange(len(regionLabels)))
+            if i==len(latencyLabels)-1:
+                ax.set_xticklabels(regionLabels)
+            else:
+                ax.set_xticklabels([])
+            ax.set_ylabel(latencyLabels[key])
+            if i==0:
+                ax.set_title(state)
 
 
 # plot predicted vs actual performance
-fracSame = {exp: {region: {state: np.nan for state in ('active','passive')} for region in regionLabels} for exp in result}
-for exp in data:
-    response = data[exp]['response'][:]
-    trials = (response=='hit') | (response=='miss')
-    behavior = np.ones(trials.sum())
-    behavior[response[trials]=='miss'] = -1
-    for probe in result[exp]:
-        for region in regionLabels:
-            if 'region' in result[exp][probe] and result[exp][probe]['region']==region:
-                for state in ('active','passive'):
-                    p = result[exp][probe][state]['changePredict']
-                    if len(p)>0:
-                        predictProb = p[0]
-                        predict = (predictProb>0.5).astype(int)
-                        predict[predict==0] = -1
-                        fracSame[exp][region][state] = np.sum((behavior*predict)==1)/behavior.size
-    
-plt.figure(facecolor='w',figsize=(6,4))
-ax = plt.subplot(1,1,1)
-x = np.arange(len(regionLabels))
-for state,clr,grayclr in zip(('active','passive'),'rb',([1,0.5,0.5],[0.5,0.5,1])):
-#    for exp in fracSame:
-#        y = [fracSame[exp][region][state] for region in regionLabels]
-#        ax.plot(x,y,color=grayclr)
-    regionData = [[fracSame[exp][region][state] for exp in fracSame] for region in regionLabels]
-    m = np.array([np.nanmean(d) for d in regionData])
-    s = np.array([np.nanstd(d)/(np.sum(~np.isnan(d))**0.5) for d in regionData])
-    ax.plot(x,m,color=clr,linewidth=2,label=state)
-    ax.fill_between(x,m+s,m-s,color=clr,alpha=0.25)
-for side in ('right','top'):
-    ax.spines[side].set_visible(False)
-ax.tick_params(direction='out',top=False,right=False)
-ax.set_xticks(x)
-ax.set_xticklabels(regionLabels)
-ax.set_ylabel('Fraction Predicted')
-ax.legend()
+for model in modelNames:
+    fracSame = {exp: {region: {state: np.nan for state in ('active','passive')} for region in regionLabels} for exp in result}
+    for exp in data:
+        response = data[exp]['response'][:]
+        trials = (response=='hit') | (response=='miss')
+        behavior = np.ones(trials.sum())
+        behavior[response[trials]=='miss'] = -1
+        for probe in result[exp]:
+            for region in regionLabels:
+                if 'region' in result[exp][probe] and result[exp][probe]['region']==region:
+                    for state in ('active','passive'):
+                        p = result[exp][probe][state]['changePredict'][model]
+                        if len(p)>0:
+                            predictProb = p[0]
+                            predict = (predictProb>0.5).astype(int)
+                            predict[predict==0] = -1
+                            fracSame[exp][region][state] = np.sum((behavior*predict)==1)/behavior.size
+        
+    fig = plt.figure(facecolor='w',figsize=(6,4))
+    fig.text(0.5,0.95,model,fontsize=14,horizontalalignment='center')
+    ax = plt.subplot(1,1,1)
+    x = np.arange(len(regionLabels))
+    for state,clr,grayclr in zip(('active','passive'),'rb',([1,0.5,0.5],[0.5,0.5,1])):
+#        for exp in fracSame:
+#            y = [fracSame[exp][region][state] for region in regionLabels]
+#            ax.plot(x,y,color=grayclr)
+        regionData = [[fracSame[exp][region][state] for exp in fracSame] for region in regionLabels]
+        m = np.array([np.nanmean(d) for d in regionData])
+        s = np.array([np.nanstd(d)/(np.sum(~np.isnan(d))**0.5) for d in regionData])
+        ax.plot(x,m,color=clr,linewidth=2,label=state)
+        ax.fill_between(x,m+s,m-s,color=clr,alpha=0.25)
+    for side in ('right','top'):
+        ax.spines[side].set_visible(False)
+    ax.tick_params(direction='out',top=False,right=False)
+    ax.set_xticks(x)
+    ax.set_xticklabels(regionLabels)
+    ax.set_ylabel('Fraction Predicted')
+    ax.legend()
 
 
 for exp in fracSame:
