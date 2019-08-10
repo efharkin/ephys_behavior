@@ -286,7 +286,7 @@ for ind,(region,regionLabels) in enumerate(regionNames):
         ax.set_ylabel('Spikes/s')
         ax.set_title(region+' '+lbl)
 
-for ax,ylbl in zip(axes,('Baseline (spikes/s)','Mean Resp (spikes/s)','Peak Resp (spikes/s)','Change Mod','Latency (ms)')):
+for ax,ylbl in zip(axes,('Baseline (spikes/s)','Mean Resp (spikes/s)','Peak Resp (spikes/s)','Modulation Index','Latency (ms)')):
     for side in ('right','top'):
         ax.spines[side].set_visible(False)
     ax.tick_params(direction='out',top=False,right=False,labelsize=14)
