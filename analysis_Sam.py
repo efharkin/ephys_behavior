@@ -22,24 +22,17 @@ from sklearn.svm import LinearSVC
 from sklearn.model_selection import cross_val_score, cross_val_predict
 
 
-def getPopData(objToHDF5=False,popDataToHDF5=True,miceToAnalyze='all',probesToAnalyze='all',imageSetsToAnalyze='all',mustHavePassive=False,sdfParams={}):
+def getPopData(objToHDF5=False,popDataToHDF5=True,miceToAnalyze='all',sdfParams={}):
     if popDataToHDF5:
         popHDF5Path = os.path.join(localDir,'popData.hdf5')
     for mouseID,ephysDates,probeIDs,imageSet,passiveSession in mouseInfo:
         if miceToAnalyze!='all' and mouseID not in miceToAnalyze:
             continue
-        for date,probes,imgset,passive in zip(ephysDates,probeIDs,imageSet,passiveSession):
-            if probesToAnalyze!='all':
-                probes = probesToAnalyze
-            if imageSetsToAnalyze!='all' and imgset not in imageSetsToAnalyze:
-                continue
-            if mustHavePassive and not passive:
-                continue
-            
+        for date,probes in zip(ephysDates,probeIDs):
             expName = date+'_'+mouseID
             print(expName)
             dataDir = baseDir+expName
-            obj = getData.behaviorEphys(dataDir,probes,probeGen='3b')
+            obj = getData.behaviorEphys(dataDir,probes)
             hdf5Path = os.path.join(localDir,expName+'.hdf5')
             
             if objToHDF5:
@@ -140,12 +133,12 @@ def findLatency(data,baseWin=None,respWin=None,method='rel',thresh=3,minPtsAbove
 
 
 def calcChangeMod(preChangeSDFs,changeSDFs,baseWin,respWin):
-    diff = changeSDFs-preChangeSDFs
-    changeMod = np.log2(diff[:,respWin].mean(axis=1)/preChangeSDFs[:,respWin].mean(axis=1))
-    changeMod[np.isinf(changeMod)] = np.nan
-    meanMod = 2**np.nanmean(changeMod)
-    semMod = (np.log(2)*np.nanstd(changeMod)*meanMod)/(changeMod.size**0.5)
-    changeLat = findLatency(diff,baseWin,respWin)
+    pre = preChangeSDFs[:,respWin].mean(axis=1)
+    change = changeSDFs[:,respWin].mean(axis=1)
+    changeMod = np.clip((change-pre)/(change+pre),-1,1)
+    meanMod = changeMod.mean()
+    semMod = changeMod.std()/(changeMod.size**0.5)
+    changeLat = findLatency(changeSDFs-preChangeSDFs,baseWin,respWin)
     return meanMod, semMod, changeLat
 
 
@@ -175,7 +168,7 @@ getPopData(objToHDF5=False,popDataToHDF5=True)
 getPopData(objToHDF5=True,popDataToHDF5=True,miceToAnalyze=(''))
 
 
-data = h5py.File(os.path.join(localDir,'popData.hdf5'))
+data = h5py.File(os.path.join(localDir,'popData.hdf5'),'r')
 
 baseWin = slice(0,250)
 respWin = slice(250,500)
@@ -183,7 +176,7 @@ respWin = slice(250,500)
 exps = data.keys() # all experiments
 
 # A or B days that have passive session
-Aexps,Bexps = [[mouseID+'_'+exp[0] for exp in mouseInfo for mouseID,probes,imgSet,hasPassive in zip(exp[1:]) if imgSet==im and hasPassive] for im in 'AB']
+Aexps,Bexps = [[mouseID+'_'+exp[0] for exp in mouseInfo for mouseID,probes,imgSet,hasPassive in zip(*exp[1:]) if imgSet==im and hasPassive] for im in 'AB']
 exps = Aexps+Bexps
 
 
@@ -191,7 +184,7 @@ exps = Aexps+Bexps
 ###### change mod and latency analysis
 
 allPre,allChange = [[np.concatenate([data[exp]['sdfs'][probe][state][epoch][:].mean(axis=1) for exp in exps for probe in data[exp]['sdfs']]) for state in ('active','passive')] for epoch in ('preChange','change')]
-(hasSpikesActive,hasRespActive),(hasSpikesPassive,hasRespPassive) = [findResponsiveUnits(sdfs,baseWin,respWin,thresh=5) for sdfs in allChange]
+(hasSpikesActive,hasRespActive),(hasSpikesPassive,hasRespPassive) = [findResponsiveUnits(sdfs,baseWin,respWin) for sdfs in allChange]
 baseRate = [sdfs[:,baseWin].mean(axis=1) for sdfs in allPre+allChange]
 activePre,passivePre,activeChange,passiveChange = [sdfs-sdfs[:,baseWin].mean(axis=1)[:,None] for sdfs in allPre+allChange]
 hasResp = hasSpikesActive & hasSpikesPassive & hasRespActive
@@ -241,7 +234,7 @@ for ind,(region,regionLabels) in enumerate(regionNames):
         axes[-2].plot([ind,ind],[m-s,m+s],ec)
             
     for lat,ec,fc in zip((activeLat,passiveLat,activeChangeLat,passiveChangeLat,diffChangeLat),'rbrbk',('none','none','r','b','k')):
-        m = np.nanmedian(lat)
+        m = np.nanmean(lat)
         s = np.nanstd(lat)/(lat.size**0.5)
         axes[-1].plot(ind,m,'o',mec=ec,mfc=fc)
         axes[-1].plot([ind,ind],[m-s,m+s],ec)
@@ -251,11 +244,35 @@ for ind,(region,regionLabels) in enumerate(regionNames):
     ylim = None
     for i,(pre,change,clr,lbl) in enumerate(zip((activePre,passivePre),(activeChange,passiveChange),([1,0,0],[0,0,1]),('Active','Passive'))):
         ax = fig.add_subplot(2,1,i+1)
-        ax.plot(change[inRegion].mean(axis=0),color=clr)
         clrlight = np.array(clr).astype(float)
         clrlight[clrlight==0] = 0.7
-        ax.plot(pre[inRegion].mean(axis=0),color=clrlight)
-        ax.plot((change-pre)[inRegion].mean(axis=0),color=[0.5,0.5,0.5])
+        for d,c in zip((pre,change,change-pre),(clrlight,clr,[0.5,0.5,0.5])):
+            m = np.mean(d[inRegion],axis=0)
+            s = np.std(d[inRegion],axis=0)/(inRegion.sum()**0.5)
+            ax.plot(m,color=c)
+            ax.fill_between(np.arange(len(m)),m+s,m-s,color=c,alpha=0.25) 
+        for side in ('right','top'):
+            ax.spines[side].set_visible(False)
+        ax.tick_params(direction='out',top=False,right=False)
+        ax.set_xlim([250,600])
+        ax.set_xticks([250,350,450,550])
+        ax.set_xticklabels([0,100,200,300,400])
+        if ylim is None:
+            ylim = plt.get(ax,'ylim')
+        else:
+            ax.set_ylim(ylim)
+        ax.set_ylabel('Spikes/s')
+        ax.set_title(region+' '+lbl)
+    
+    fig = plt.figure(figsize=(8,8))
+    ylim = None
+    for i,(active,passive,lbl) in enumerate(zip((activeChange,activePre),(passiveChange,passivePre),('Change','Pre'))):
+        ax = fig.add_subplot(2,1,i+1)
+        for d,c in zip((active,passive),'rb'):
+            m = np.mean(d[inRegion],axis=0)
+            s = np.std(d[inRegion],axis=0)/(inRegion.sum()**0.5)
+            ax.plot(m,color=c)
+            ax.fill_between(np.arange(len(m)),m+s,m-s,color=c,alpha=0.25) 
         for side in ('right','top'):
             ax.spines[side].set_visible(False)
         ax.tick_params(direction='out',top=False,right=False)

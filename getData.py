@@ -22,7 +22,7 @@ import analysis_utils
 dataDir = 'Z:\\04112019'
 
 #Which probes to run through analysis
-probeIDs = 'BCDEF'
+probeIDs = 'ABCDEF'
 
 class behaviorEphys():
     
