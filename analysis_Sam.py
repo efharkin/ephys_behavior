@@ -185,6 +185,10 @@ exps = Aexps+Bexps
 
 allPre,allChange = [[np.concatenate([data[exp]['sdfs'][probe][state][epoch][:].mean(axis=1) for exp in exps for probe in data[exp]['sdfs']]) for state in ('active','passive')] for epoch in ('preChange','change')]
 
+expNames = np.concatenate([[exp]*len(data[exp]['sdfs'][probe]['active']['change']) for exp in exps for probe in data[exp]['sdfs']])
+expDates = np.array([exp[:8] for exp in expNames])
+expMouseIDs = np.array([exp[-6:] for exp in expNames])
+
 (hasSpikesActive,hasRespActive),(hasSpikesPassive,hasRespPassive) = [findResponsiveUnits(sdfs,baseWin,respWin) for sdfs in allChange]
 baseRate = [sdfs[:,baseWin].mean(axis=1) for sdfs in allPre+allChange]
 activePre,passivePre,activeChange,passiveChange = [sdfs-sdfs[:,baseWin].mean(axis=1)[:,None] for sdfs in allPre+allChange]
@@ -208,11 +212,15 @@ regionNames = (
 regionNames = regionNames[:6]
 
 nUnits = []
+nExps = []
+nMice = []
 figs = [plt.figure(figsize=(12,6)) for _ in range(6)]
 axes = [fig.add_subplot(1,1,1) for fig in figs]
 for ind,(region,regionLabels) in enumerate(regionNames):
     inRegion = np.in1d(regions,regionLabels) & hasResp
     nUnits.append(inRegion.sum())
+    nExps.append(len(set(expDates[inRegion])))
+    nMice.append(len(set(expMouseIDs[inRegion])))
     
     # plot baseline and response spike rates
     for sdfs,base,mec,mfc,lbl in zip((activePre,passivePre,activeChange,passiveChange),baseRate,('rbrb'),('none','none','r','b'),('Active Pre','Passive Pre','Active Change','Passive Change')):
@@ -222,7 +230,7 @@ for ind,(region,regionLabels) in enumerate(regionNames):
             m = r.mean()
             s = r.std()/(r.size**0.5)
             lbl = None if ind>0 else lbl
-            ax.plot(ind,m,'o',mec=mec,mfc=mfc,label=lbl)
+            ax.plot(ind,m,'o',mec=mec,mfc=mfc,ms=12,label=lbl)
             ax.plot([ind,ind],[m-s,m+s],color=mec)
     
     # plot mean change mod and latencies
@@ -233,18 +241,18 @@ for ind,(region,regionLabels) in enumerate(regionNames):
     
     for m,s,mec,mfc,lbl in zip((activeChangeMean,passiveChangeMean),(activeChangeSem,passiveChangeSem),'rb','rb',('Active','Passive')):
         lbl = None if ind>0 else lbl
-        axes[-3].plot(ind,m,'o',mec=mec,mfc=mfc,label=lbl)
+        axes[-3].plot(ind,m,'o',mec=mec,mfc=mfc,ms=12,label=lbl)
         axes[-3].plot([ind,ind],[m-s,m+s],mec)
         
     for m,s,mec,mfc,lbl in zip((diffChangeMean,diffPreMean),(diffChangeSem,diffPreSem),'kk',('k','none'),('Change','Pre-change')):
         lbl = None if ind>0 else lbl
-        axes[-2].plot(ind,m,'o',mec=mec,mfc=mfc,label=lbl)
+        axes[-2].plot(ind,m,'o',mec=mec,mfc=mfc,ms=12,label=lbl)
         axes[-2].plot([ind,ind],[m-s,m+s],mec)
             
     for lat,mec,mfc in zip((activeLat,passiveLat,activeChangeLat,passiveChangeLat,diffChangeLat),'rbrbk',('none','none','r','b','k')):
         m = np.nanmean(lat)
         s = np.nanstd(lat)/(lat.size**0.5)
-        axes[-1].plot(ind,m,'o',mec=mec,mfc=mfc)
+        axes[-1].plot(ind,m,'o',mec=mec,mfc=mfc,ms=12)
         axes[-1].plot([ind,ind],[m-s,m+s],mec)
     
     # plot pre and post change responses and their difference
