@@ -7,7 +7,7 @@ Created on Tue Oct 25 21:47:32 2016
 
 import h5py
 import numpy as np
-from PyQt4 import QtGui
+from PyQt5 import QtGui
 
 
 def getFile(caption='Choose File',rootDir='',fileType=''):
@@ -24,13 +24,13 @@ def getFiles(caption='Choose File',rootDir='',fileType=''):
     filePaths = QtGui.QFileDialog.getOpenFileNames(None,caption,rootDir,fileType)
     return [str(f) for f in filePaths]
 
-    
+
 def getDir(caption='Choose Directory',rootDir=''):
     app = QtGui.QApplication.instance()
     if app is None:
         app = QtGui.QApplication([])
     return str(QtGui.QFileDialog.getExistingDirectory(None,caption,rootDir))
-    
+
 
 def saveFile(caption='Save As',rootDir='',fileType=''):
     app = QtGui.QApplication.instance()
@@ -49,7 +49,7 @@ def objToHDF5(obj,filePath=None,fileOut=None,grp=None,saveDict=None):
         newFile = fileOut
     else:
         newFile = None
-    if grp is None:    
+    if grp is None:
         grp = fileOut['/']
     if saveDict is None:
         saveDict = obj.__dict__
@@ -68,14 +68,14 @@ def objToHDF5(obj,filePath=None,fileOut=None,grp=None,saveDict=None):
                     try:
                         grp.create_dataset(key,data=np.array(saveDict[key],dtype=object),dtype=h5py.special_dtype(vlen=str))
                     except:
-                        print('Could not save: ', key)                  
+                        print('Could not save: ', key)
     if newFile is not None:
         newFile.close()
-                
-                
+
+
 def hdf5ToObj(obj,filePath=None,grp=None,loadDict=None):
     if grp is None:
-        if filePath is None:        
+        if filePath is None:
             filePath = getFile(fileType='*.hdf5')
             if filePath=='':
                 return
@@ -101,7 +101,7 @@ def hdf5ToObj(obj,filePath=None,grp=None,loadDict=None):
                 hdf5ToObj(obj,grp=val,loadDict=loadDict[key])
     if newFile is not None:
         newFile.close()
-                
-                
+
+
 if __name__=="__main__":
-    pass 
+    pass
