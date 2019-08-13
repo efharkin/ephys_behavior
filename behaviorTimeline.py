@@ -54,7 +54,8 @@ mouseInfo = (('385533',('09072018','09102018','09112018','09172018')),
              ('421323',('04252019','04262019')),
              ('422856',('04302019','05012019')),
              ('423749',('05162019','05172019')),
-#             ('422699',('05222019','05232019')),
+             ('427937',('06062019','06072019')),
+             ('423745',('06122019','06132019')),
             )
 
 unloadablePklFiles = []
@@ -168,7 +169,6 @@ for ind,(mouseID,ephysDates) in enumerate(mouseInfo):
     plt.tight_layout()
 
 
-labels = ('NSB','Rig 1','Ephys -2','Ephys -1','Ephys 1','Ephys 2')
 numRewards = []
 dpr = []
 engaged = []
@@ -207,29 +207,10 @@ for day,rig,ephys,rewards,d,eng in zip(trainingDay,isRig,isEphys,rewardsEarned,d
 
 params = (numRewards,engaged,dpr)
 paramNames = ('Rewards Earned','Prob. Engaged','d prime')
-fig = plt.figure(facecolor='w')
-for i,(prm,ylab) in enumerate(zip(params,paramNames)): 
-    ax = plt.subplot(len(params),1,i+1)
-    for p,rig in zip(prm,isRig):
-        mkr = 'o' if not all(rig) else 's'
-        ax.plot(p,'k'+mkr+'-',mfc='none',ms=10)
-    for side in ('right','top'):
-        ax.spines[side].set_visible(False)
-    ax.tick_params(direction='out',top=False,right=False,labelsize=12)
-    ax.set_xlim([-0.25,5.25])
-    ymax = 1.05*np.nanmax(prm)
-    ax.plot([3.5]*2,[0,ymax],'k--')
-    ax.set_ylim([0,ymax])
-    ax.set_xticks(np.arange(len(labels)))
-    if i==len(params)-1:
-        ax.set_xticklabels(labels)
-    else:
-        ax.set_xticklabels([])
-    ax.set_ylabel(ylab,fontsize=12)
 
-show = slice(2,6)
-fig = plt.figure(facecolor='w')
-for i,(prm,ylab,ylim) in enumerate(zip(params,paramNames,([0,250],[0,1],[0,3]))):
+show = slice(0,6)
+fig = plt.figure(facecolor='w',figsize=(8,6))
+for i,(prm,ylab,ylim) in enumerate(zip(params,paramNames,([0,300],[0,1],[0,4]))):
     ax = plt.subplot(len(params),1,i+1)
     ymax = 0
     for p,rig in zip(prm,isRig):
@@ -250,19 +231,19 @@ for i,(prm,ylab,ylim) in enumerate(zip(params,paramNames,([0,250],[0,1],[0,3])))
     ax.tick_params(direction='out',top=False,right=False,labelsize=12)
     ax.set_xlim([-0.25,show.stop-show.start-0.75])
     ymax = 1.05*max(ymax,np.nanmax((meanPrm+stdPrm)[show])) if ylim is None else ylim[1]
-    ax.plot([(show.stop-show.start)//2-0.5]*2,[0,ymax],'k--')
+    ax.plot([(show.stop-show.start)-2.5]*2,[0,ymax],'k--')
     ax.set_ylim([0,ymax])
     ax.set_xticks(np.arange(len(labels[show])))
     if i==len(params)-1:
-        ax.set_xticklabels([-2,-1,1,2])
+        ax.set_xticklabels(['Last NSB','First NP3',-2,-1,1,2])
         ax.set_xlabel('Day',fontsize=12)
     else:
         ax.set_xticklabels([])
     ax.set_ylabel(ylab,fontsize=12)
     ax.yaxis.set_label_coords(-0.075,0.5)
     ax.locator_params(axis='y',nbins=3)
-fig.text(0.33,0.95,'Training',fontsize=14,horizontalalignment='center')
-fig.text(0.7,0.95,'Ephys',fontsize=14,horizontalalignment='center')
+fig.text(0.37,0.95,'Training',fontsize=14,horizontalalignment='center')
+fig.text(0.79,0.95,'Ephys',fontsize=14,horizontalalignment='center')
 
 
 meanImageHitRate = []

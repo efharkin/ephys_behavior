@@ -14,7 +14,8 @@ import matplotlib.pyplot as plt
 from matplotlib import patches
 import matplotlib.gridspec as gridspec
 from matplotlib.backends.backend_pdf import PdfPages
-from probeData import formatFigure
+from analysis_utils import formatFigure
+import scipy.stats
 
 
 def behavior_summary(obj, tag=''):
@@ -213,7 +214,10 @@ def plot_unit_behavior_summary(obj, pid, uid, multipageObj=None):
         plt.close(fig)
 
 
-def plot_images(obj, axes):
+def plot_images(obj, axes=None):
+    if axes is None:
+        fig, axes = plt.subplots(8)
+        
     for ax,img,imname in zip(axes,obj.imagesDownsampled,obj.imageNames):
         ax.imshow(img,cmap='gray',clim=[0,255])
         ax.set_xticks([])
@@ -221,10 +225,15 @@ def plot_images(obj, axes):
         ax.set_ylabel(imname,fontsize=12)
 
 
-def plot_rf(obj, spikes, axes=None, resp_latency=0.05):
+def plot_rf(obj, spikes, axes=None, resp_latency=0.025, plot=True, returnMat=False):
+    if axes is None and plot:
+        fig, ax = plt.subplots()
+        axes = [ax]
+    
     #extract trial stim info (xpos, ypos, ori)
     sweep_table = np.array(obj.rfStimParams['sweep_table'])   #table with rfstim parameters, indexed by sweep order to give stim for each trial
     sweep_order = np.array(obj.rfStimParams['sweep_order'])   #index of stimuli for sweep_table for each trial
+    trialRepeats = int(len(sweep_order)/float(len(sweep_table)))
     
     trial_xpos = np.array([pos[0] for pos in sweep_table[sweep_order, 0]])
     trial_ypos = np.array([pos[1] for pos in sweep_table[sweep_order, 0]])
@@ -234,12 +243,17 @@ def plot_rf(obj, spikes, axes=None, resp_latency=0.05):
     ypos = np.unique(trial_ypos)
     ori = np.unique(trial_ori)
     
+    respInds = tuple([(np.where(ypos==y)[0][0], np.where(xpos==x)[0][0], np.where(ori==o)[0][0]) for (y,x,o) in zip(trial_ypos, trial_xpos, trial_ori)])
     trial_spikes = analysis_utils.find_spikes_per_trial(spikes, obj.rf_trial_start_times+resp_latency, obj.rf_trial_start_times+resp_latency+0.2)
     respMat = np.zeros([ypos.size, xpos.size, ori.size])
-    for (y, x, o, tspikes) in zip(trial_ypos, trial_xpos, trial_ori, trial_spikes):
-        respInd = tuple([np.where(ypos==y)[0][0], np.where(xpos==x)[0][0], np.where(ori==o)[0][0]])
+    for (respInd, tspikes) in zip(respInds, trial_spikes):
         respMat[respInd] += tspikes
+    
     bestOri = np.unravel_index(np.argmax(respMat), respMat.shape)[-1]
+
+    nullRepeats = 1000
+    null = [trial_spikes[randinds].sum() for randinds in [np.random.randint(0, trial_spikes.size, trialRepeats) for n in np.arange(nullRepeats)]]
+    pMat = np.reshape([scipy.stats.percentileofscore(null, ind) for ind in respMat.flatten()], respMat.shape)
     
     gridSpacingDeg = xpos[1]-xpos[0]
     gridSpacingPix = int(round(obj.imageDownsamplePixPerDeg*gridSpacingDeg))
@@ -253,21 +267,27 @@ def plot_rf(obj, spikes, axes=None, resp_latency=0.05):
     rmapColor = plt.cm.magma(rmap)[:,:,:3]
     rmapColor *= rmap[:,:,None]
     
-    for ax,img,imname in zip(axes[:-1],obj.imagesDownsampled,obj.imageNames):
-        img = img.astype(float)
-        img /= 255
-        img *= 1-rmap
-        ax.imshow(rmapColor+img[:,:,None])
-        ax.set_xticks([])
-        ax.set_yticks([])
-        ax.set_ylabel(imname,fontsize=12)
-        
-    axes[-1].imshow(rmap,cmap='magma')
-    axes[-1].set_xticks([])
-    axes[-1].set_yticks([])
+    if plot:
+        for ax,img,imname in zip(axes[:-1],obj.imagesDownsampled,obj.imageNames):
+            img = img.astype(float)
+            img /= 255
+            img *= 1-rmap
+            ax.imshow(rmapColor+img[:,:,None])
+            ax.set_xticks([])
+            ax.set_yticks([])
+            ax.set_ylabel(imname,fontsize=12)
+            
+        axes[-1].imshow(rmap,cmap='magma')
+        axes[-1].set_xticks([])
+        axes[-1].set_yticks([])
+    if returnMat:
+        return respMat, pMat
 
 
 def plot_psth_all_flashes(obj, spikes, axes=None, preTime = 0.05, postTime = 0.55, sdfSigma=0.005, returnSDFs=False):
+    if axes is None:
+        fig, axes = plt.subplots(9)
+    
     image_flash_times = obj.frameAppearTimes[np.array(obj.core_data['visual_stimuli']['frame'])]
     image_id = np.array(obj.core_data['visual_stimuli']['image_name'])
     
@@ -308,6 +328,9 @@ def plot_psth_all_flashes(obj, spikes, axes=None, preTime = 0.05, postTime = 0.5
         return sdfs
 
 def plot_psth_omitted_flashes(obj, spikes, axes=None, preTime = 0.05, postTime = 0.55, sdfSigma=0.005):
+    if axes is None:
+        fig, axes = plt.subplots(9)
+    
     image_flash_times = obj.frameAppearTimes[obj.omittedFlashFrames]
     image_id = np.array(obj.omittedFlashImage)
     
@@ -347,6 +370,9 @@ def plot_psth_omitted_flashes(obj, spikes, axes=None, preTime = 0.05, postTime =
     
     
 def plot_psth_hits_vs_misses(obj, spikes, axes=None, preTime=1.55, postTime=4.5, sdfSigma=0.02):
+    if axes is None:
+        fig, axes = plt.subplots(9)
+    
     hitSDFs = []
     missSDFs = []
     for resp,s in zip((obj.hit, obj.miss),(hitSDFs,missSDFs)):
@@ -480,7 +506,10 @@ def plot_spike_template(obj, pid, uid, gs=None):
     acgax.set_ylabel('Spike count')
 
 
-def plot_lick_triggered_fr(obj, spikes, axis, min_inter_lick_time = 0.5, preTime=1, postTime=2):
+def plot_lick_triggered_fr(obj, spikes, axis=None, min_inter_lick_time = 0.5, preTime=1, postTime=2, plot=True, sdfSigma=0.01, returnSDF=False):
+    if axis is None and plot:
+        fig, axis = plt.subplots()
+    
     frameTimes = obj.frameAppearTimes    
     
     trial_start_frames = np.array(obj.trials['startframe'])
@@ -502,17 +531,24 @@ def plot_lick_triggered_fr(obj, spikes, axis, min_inter_lick_time = 0.5, preTime
     hit_lick_times = first_lick_times[np.where(hit[first_lick_trials])[0]]
     bad_lick_times = first_lick_times[np.where(falseAlarm[first_lick_trials] | earlyResponse[first_lick_trials])[0]]
    
-    hit_psth, t = analysis_utils.getSDF(spikes,hit_lick_times-preTime,preTime+postTime)
-    bad_psth, t  = analysis_utils.getSDF(spikes,bad_lick_times-preTime,preTime+postTime)
+    hit_psth, t = analysis_utils.getSDF(spikes,hit_lick_times-preTime,preTime+postTime, sigma=sdfSigma)
+    bad_psth, t  = analysis_utils.getSDF(spikes,bad_lick_times-preTime,preTime+postTime, sigma=sdfSigma)
     
-    hit, = axis.plot(t-1,hit_psth, 'k')
-    bad, = axis.plot(t-1, bad_psth, 'r')
-    axis.legend((hit, bad), ('hit', 'aborted/FA'), loc='best', prop={'size':8})
-    formatFigure(plt.gcf(), axis, xLabel='Time to lick (s)',  yLabel='Lick-Trig. FR (Hz)')
-    axis.plot([0,0], axis.get_ylim(), 'k--')
+    if plot:
+        hit, = axis.plot(t-1,hit_psth, 'k')
+        bad, = axis.plot(t-1, bad_psth, 'r')
+        axis.legend((hit, bad), ('hit', 'aborted/FA'), loc='best', prop={'size':8})
+        formatFigure(plt.gcf(), axis, xLabel='Time to lick (s)',  yLabel='Lick-Trig. FR (Hz)')
+        axis.plot([0,0], axis.get_ylim(), 'k--')
+        
+    if returnSDF:
+        return hit_psth, bad_psth
     
     
-def plot_run_triggered_fr(obj, spikes, axis, preTime=1, postTime=2):      
+def plot_run_triggered_fr(obj, spikes, axis=None, preTime=1, postTime=2): 
+    if axis is None:
+        fig, axis = plt.subplots()
+        
     if len(obj.behaviorRunStartTimes)>0:
         run_psth, t = analysis_utils.getSDF(spikes,obj.behaviorRunStartTimes-preTime,preTime+postTime)
         axis.plot(t-1,run_psth, 'k')
@@ -520,9 +556,11 @@ def plot_run_triggered_fr(obj, spikes, axis, preTime=1, postTime=2):
         formatFigure(plt.gcf(), axis, xLabel='Time to run (s)', yLabel='Run-Trig. FR (Hz)')
     
 
-def plot_saccade_triggered_fr(obj, spikes, axis, preTime=2, postTime=2, sdfSigma=0.02, latThresh=5, minPtsAboveThresh=50):
+def plot_saccade_triggered_fr(obj, spikes, axis=None, preTime=2, postTime=2, sdfSigma=0.02, latThresh=5, minPtsAboveThresh=50):
     if obj.eyeData is None:
         return    
+    if axis is None:
+        fig, axis = plt.subplots()
     
     latFilt = np.ones(minPtsAboveThresh)
 
